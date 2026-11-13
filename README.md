@@ -60,52 +60,52 @@ A running supervisor reads the config once, at start: after editing `orchestrate
 
 ## Config
 
-`.orchestrate/orchestrate.toml`. Relative paths are relative to the file's folder.
+`.orchestrate/orchestrate.toml`. Relative paths are relative to the file's folder. Each key's default is in `src/orchestrate/config.py` (`orch roles` prints the roles); `orch scaffold` writes a file with the defaults filled in.
 
-| Section | Key | Default | Meaning |
-|---|---|---|---|
-| `[project]` | `name` | (required) | Project name |
-| | `repo` | (required) | The main checkout; agents never touch it |
-| | `destination` | `main` | The branch units merge into |
-| | `branch_prefix` | `agent/` | Unit branches are `<prefix><unit in lowercase>` |
-| | `planning_repo` | none | Where specs, plans and bookkeeping live |
-| | `work_plan` | none | The work-plan file; `orch` reads its `ID` and `Milestone` columns |
-| | `scratch` | `scratch` | Per-worktree folder for briefs, summaries and reviews (git-excluded) |
-| `[herdr]` | `workspace` | `$HERDR_WORKSPACE_ID` | Herdr workspace for unit tabs |
-| | `orchestrator_pane` | none | The orchestrator's pane, for reference |
-| `[worktrees]` | `paths` | `[]` | Unit worktrees (`orch worktrees` fills it) |
-| | `share` | `[]` | Untracked files of the main checkout linked into each worktree |
-| `[land]` | `adapter` | none | `adapters/land-<name>` |
-| | `checks` | `[]` | Shell commands run in the clean push checkout before a push |
-| | `heavy_lock` | none | Lock file held around the checks and the push, for a heavy suite on one machine |
-| | `push_suffix` | `-push` | Push checkout path is `<worktree><suffix>` |
-| | `timeout_minutes` | `60` | How long a land waits for the build |
-| | `theirs_on_conflict` | `[]` | Files where the destination's version wins a merge conflict |
-| | `commit_paths` | `[]` | Files the checks write that are committed before the push |
-| `[timeouts]` | `stall_minutes` | `20` | An idle agent with nothing new for this long is an event |
-| | `wedged_minutes` | `45` | A "working" agent whose transcript is silent this long is an event |
-| | `job_hours` | `4` | A background job running longer is an event |
-| | `poll_seconds` | `30` | Supervisor pass interval |
-| | `idle_seconds` | `60` | An agent counts as finished after two idle readings this far apart |
-| `[review]` | `clean` | `clean`, `meets its outcome` | Verdict words that pass |
-| | `hold` | `not clean`, `changes needed`, `hold` | Verdict words that send fixes |
-| | `docs_only` | `docs/**`, `*.md` | A change touching only these gets no review (`*` stays within a folder) |
-| | `verdict_lines` | `60` | A bare verdict line must come within this many lines |
-| | `context` | `[]` | Files copied into a print-mode reviewer's throwaway worktree |
-| `[roles.<role>]` | `harness`, `model`, `effort`, `mode` | see `orch roles` | One per role; `mode` is `interactive` or `print` |
-| `[pipeline.<harness>]` | `reviews`, `light` | claude: `reviewer`, `second_reviewer`; agy: `reviewer` | Reviews a unit built on that harness gets, and its light reviewer |
-| `[sources]` | `impl_docs` | `deferred` | `deferred` while implementation docs wait for the end; `maintained` otherwise |
-| `[[sources.entries]]` | `path`, `kind`, `owner`, `compact`, `root` | owner `agent`, compact `none`, root `impl` | A file or glob; kind `spec`, `plan`, `bookkeeping`, `memory`, `log`, `code` or `docs`; owner `owner` or `agent`; compact `conservative`, `full` or `none`; root `impl`, `planning` or `workspace` (absolute and `~` paths stand alone) |
-| `[[homes]]` | `question`, `path`, `root` | root `planning` | The one home of each kind of fact |
-| `[breakpoints]` | `steps` | `freeze`, `align`, `compact`, `digest` | Steps run at each breakpoint |
-| | `conditional_go` | none | Conditions under which the build carries on without waiting |
-| `[spec_gate]` | `enabled` | `false` | Turns on the spec gate |
-| | `spec` | none | The spec file |
-| | `acceptance_dir`, `drafts_dir` | `tests/acceptance`, `scratch/acceptance` | Installed tests and their drafts |
-| | `install_checks` | `[]` | Commands that must pass before drafts are committed |
-| | `title_section`, `title_pattern`, `guarantee_pattern`, `test_marker` | see `config.py` | How scenario titles, guarantee IDs and test markers are found |
-| | `property_dir` | `properties` | Tests here need no scenario title |
-| | `milestone` | `1` | Untested titles of earlier milestones fail the scan |
+| Section | Key | Meaning |
+|---|---|---|
+| `[project]` | `name` | Project name |
+| | `repo` | The main checkout; agents never touch it |
+| | `destination` | The branch units merge into |
+| | `branch_prefix` | Unit branches are `<prefix><unit in lowercase>` |
+| | `planning_repo` | Where specs, plans and bookkeeping live |
+| | `work_plan` | The work-plan file; `orch` reads its `ID` and `Milestone` columns |
+| | `scratch` | Per-worktree folder for briefs, summaries and reviews (git-excluded) |
+| `[herdr]` | `workspace` | Herdr workspace for unit tabs |
+| | `orchestrator_pane` | The orchestrator's pane, for reference |
+| `[worktrees]` | `paths` | Unit worktrees (`orch worktrees` fills it) |
+| | `share` | Untracked files of the main checkout linked into each worktree |
+| `[land]` | `adapter` | `adapters/land-<name>` |
+| | `checks` | Shell commands run in the clean push checkout before a push |
+| | `heavy_lock` | Lock file held around the checks and the push, for a heavy suite on one machine |
+| | `push_suffix` | Push checkout path is `<worktree><suffix>` |
+| | `timeout_minutes` | How long a land waits for the build |
+| | `theirs_on_conflict` | Files where the destination's version wins a merge conflict |
+| | `commit_paths` | Files the checks write that are committed before the push |
+| `[timeouts]` | `stall_minutes` | An idle agent with nothing new for this long is an event |
+| | `wedged_minutes` | A "working" agent whose transcript is silent this long is an event |
+| | `job_hours` | A background job running longer is an event |
+| | `poll_seconds` | Supervisor pass interval |
+| | `idle_seconds` | An agent counts as finished after two idle readings this far apart |
+| `[review]` | `clean` | Verdict words that pass |
+| | `hold` | Verdict words that send fixes |
+| | `docs_only` | A change touching only these gets no review (`*` stays within a folder) |
+| | `verdict_lines` | A bare verdict line must come within this many lines |
+| | `context` | Files copied into a print-mode reviewer's throwaway worktree |
+| `[roles.<role>]` | `harness`, `model`, `effort`, `mode` | One per role; `mode` is `interactive` or `print` |
+| `[pipeline.<harness>]` | `reviews`, `light` | Reviews a unit built on that harness gets, and its light reviewer |
+| `[sources]` | `impl_docs` | `deferred` while implementation docs wait for the end; `maintained` otherwise |
+| `[[sources.entries]]` | `path`, `kind`, `owner`, `compact`, `root` | A file or glob; kind `spec`, `plan`, `bookkeeping`, `memory`, `log`, `code` or `docs`; owner `owner` or `agent`; compact `conservative`, `full` or `none`; root `impl`, `planning` or `workspace` (absolute and `~` paths stand alone) |
+| `[[homes]]` | `question`, `path`, `root` | The one home of each kind of fact |
+| `[breakpoints]` | `steps` | Steps run at each breakpoint |
+| | `conditional_go` | Conditions under which the build carries on without waiting |
+| `[spec_gate]` | `enabled` | Turns on the spec gate |
+| | `spec` | The spec file |
+| | `acceptance_dir`, `drafts_dir` | Installed tests and their drafts |
+| | `install_checks` | Commands that must pass before drafts are committed |
+| | `title_section`, `title_pattern`, `guarantee_pattern`, `test_marker` | How scenario titles, guarantee IDs and test markers are found |
+| | `property_dir` | Tests here need no scenario title |
+| | `milestone` | Untested titles of earlier milestones fail the scan |
 
 ## Trying it
 
