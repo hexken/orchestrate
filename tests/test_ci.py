@@ -88,7 +88,7 @@ def test_doctor_lists_ci_steps_without_local_checks(tmp_path):
     (tmp_path / "myapp" / "ci.yml").write_text(LIST_OF_STEPS)
     lines = [str(line) for line in ci_steps(cfg)]
     assert [line.split("check: ")[1].split("  (")[0] for line in lines] == [
-        "npm run build",
+        "cd web && npm run build",
         "uv run pytest -q",
     ]
     assert all(line.startswith("missing") for line in lines)
@@ -137,7 +137,8 @@ def test_near_misses_are_not_covered():
 
 def test_parenthesised_segments_are_covered():
     checks = ("(cd web && npm run build)",)
-    assert ci.uncovered(["cd web", "npm run build"], checks, ()) == []
+    assert ci.uncovered(["cd web", "npm run build"], checks, (), [0, 0]) == []
+    assert ci.uncovered(["cd web", "npm run build"], checks, ()) == ["npm run build"]
 
 
 def test_script_hooks_folded_blocks_and_continuations():
@@ -170,3 +171,45 @@ def test_several_ci_files(tmp_path):
     assert [line.state for line in lines] == ["missing"] and "make lint" in lines[0].what
     single = config(tmp_path, 'ci_config = "a.yml"\nchecks = ["make"]\n')
     assert [line.state for line in ci_steps(single)] == ["ok"]
+
+
+STEP_DIR = """jobs:
+  web:
+    steps:
+      - name: unit tests
+        working-directory: web
+        run: npm test
+      - run: npm test
+"""
+
+
+def test_a_step_working_directory_is_part_of_the_command():
+    found = ci.steps(STEP_DIR)
+    assert found.commands == ["cd web && npm test", "npm test"]
+    assert ci.uncovered(found.commands, ("npm test",), ()) == ["cd web && npm test"]
+    assert ci.uncovered(found.commands, ("npm test", "(cd web && npm test)"), ()) == []
+
+
+def test_a_job_level_working_directory_is_not_followed():
+    text = "jobs:\n  web:\n    defaults:\n      run:\n        working-directory: web\n"
+    text += "    steps:\n      - run: npm test\n"
+    found = ci.steps(text)
+    assert [why for _, _, why in found.unparsed] == ["`working-directory` outside a step"]
+
+
+def test_a_cd_prefix_must_match_the_directory():
+    assert ci.uncovered(["cd web && npm test"], ("cd web && npm test",), ()) == []
+    assert ci.uncovered(["npm test"], ("cd web && npm test",), ()) == ["npm test"]
+    assert ci.uncovered(["cd api && npm test"], ("(cd web && npm test) && npm test",), ()) == [
+        "cd api && npm test"
+    ]
+    assert ci.uncovered(["npm test"], ("(cd web && npm run build) && npm test",), ()) == []
+
+
+def test_a_cd_carries_over_to_later_items_of_the_same_script():
+    found = ci.steps(
+        "build:\n  script:\n    - cd web\n    - npm test\nlint:\n  script:\n    - npm test\n"
+    )
+    assert ci.uncovered(found.commands, ("npm test",), ("^cd ",), found.origins) == [
+        "cd web && npm test"
+    ]

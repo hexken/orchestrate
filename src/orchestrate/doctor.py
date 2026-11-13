@@ -122,6 +122,7 @@ def ci_steps(config: Config) -> list[Line]:
     ignore = config.land.ci_ignore
     lines: list[Line] = []
     commands: list[str] = []
+    origins: list[int] = []
     for path in config.land.ci_config:
         if not path.exists():
             lines.append(Line("missing", f"CI config {path}", "fix land.ci_config"))
@@ -136,8 +137,9 @@ def ci_steps(config: Config) -> list[Line]:
             lines.append(
                 Line("fail", f"CI config {path.name}: no steps found", "compare it by hand")
             )
+        origins += [hash((str(path), o)) for o in found.origins]
         commands += found.commands
-    for command in ci.uncovered(commands, config.land.checks, ignore):
+    for command in ci.uncovered(commands, config.land.checks, ignore, origins):
         lines.append(
             Line(
                 "missing",
