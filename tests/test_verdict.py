@@ -32,9 +32,19 @@ CASES = [
     ("clean\n\n## Commands run\n- uv run mypy\n", "clean"),
     ("clean\n\n## 2. Findings\n- **high** src/a.py:3 race\n", "hold"),
     ("clean\n## Findings\n- None.\n## Commands run\n- pytest: pass\n", "clean"),
-    ("Verdict: clean\n## Findings\nNone\n  - nested note\n", "clean"),
+    ("Verdict: clean\n## Findings\nNone\n  - nested note\n", "hold"),
     ("clean\n## Findings\n### 1. medium: race in commit\nThe lock is late.\n", "hold"),
     ("clean\n## Findings\nNone.\n## Commands\n### pytest\n- pass\n", "clean"),
+    ("clean\n## Findings\nThe route answers 500 on an empty body.\n", "hold"),
+    ("clean\n## Findings\n  1. bug\n", "hold"),
+    ("clean\n## Findings\n+ x\n", "hold"),
+    ("clean\n## Findings\n| severity | what |\n|---|---|\n| high | race |\n", "hold"),
+    ("clean\n## Findings\n| severity | what |\n|---|---|\n", "clean"),
+    ("clean\n\n**Findings**\n- a.py:1 bug\n", "hold"),
+    ("clean\n## Blocking findings\n- race\n", "hold"),
+    ("clean\n## Findings\n```sh\n# comment\n```\n- race\n", "hold"),
+    ("clean\n## Findings\nNone.\n```\nx = 1\n```\n", "clean"),
+    ("clean\n## Findings\nNo findings.\n", "clean"),
     ("", None),
 ]
 
@@ -52,8 +62,12 @@ def test_finding_items():
     text = "hold\n## Findings\n1. a.py:1 bug\n   - detail\n2. None of the rows load\n- None.\n"
     assert finding_items(text) == ["1. a.py:1 bug", "2. None of the rows load"]
     assert finding_items("clean\n- a.py:1 bug\n") is None
-    text = "hold\n## Findings\n### 1. race\n- detail\n### 2. gap\n## Commands\n- pytest\n"
-    assert finding_items(text) == ["### 1. race", "### 2. gap"]
+    text = "hold\n## Findings\n### 1. race\nThe lock is late.\n### 2. gap\n## Commands\n- x\n"
+    assert finding_items(text) == ["The lock is late.", "### 2. gap"]
+    severities = "hold\n## Findings\n### High\n1. a\n2. b\n### Medium\n1. c\n"
+    assert finding_items(severities) == ["1. a", "2. b", "1. c"]
+    detail = "hold\n## Findings\n1. race\n   the lock is late\n   - nested\n2. gap\nmore of 2\n"
+    assert finding_items(detail) == ["1. race", "2. gap"]
 
 
 def test_missing_file(tmp_path):
