@@ -353,6 +353,23 @@ def test_refresh_uses_the_project_brief(ctx, unit):
     assert ctx.fx.prompts == [("b-1", "A-1 is in main (#7): merge it.")]
 
 
+def test_build_minutes_from_the_land_log_are_marked_once(ctx, unit):
+    landing(ctx, unit, "LANDED PR #3 SUCCESSFUL h1")
+    log = Path(unit["jobs"]["land"]["log"])
+    log.write_text("pushed\nBUILD-MINUTES 17.5\nLANDED PR #3 SUCCESSFUL h1\n")
+    ctx.fx.ancestor = False
+    assert tick(ctx, unit) is None
+    assert tick(ctx, unit) is None
+    marks = [what for _, what in unit["timeline"] if what.startswith("build minutes")]
+    assert marks == ["build minutes 17.5"]
+
+
+def test_land_without_build_minutes_marks_nothing(ctx, unit):
+    landing(ctx, unit, "LANDED PR #3 SUCCESSFUL h1")
+    assert tick(ctx, unit) == "merged"
+    assert not any(what.startswith("build minutes") for _, what in unit["timeline"])
+
+
 def test_failed_build_is_an_event(ctx, unit):
     landing(ctx, unit, "LANDED PR #3 FAILED h1")
     assert tick(ctx, unit) == "land: LANDED PR #3 FAILED h1"

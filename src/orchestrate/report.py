@@ -165,6 +165,12 @@ def unit_report(folder: Path) -> dict[str, Any]:
         "harness": unit.get("harness"),
         "stages": stage_minutes(timeline),
         "fix_rounds": sum(1 for _, what in timeline if what.startswith("fixes sent")),
+        "build_minutes": round(
+            sum(
+                float(what.split()[-1]) for _, what in timeline if what.startswith("build minutes")
+            ),
+            1,
+        ),
         "events": dict(Counter(event_kind(w) for w in waits)),
         "reviews": reviews,
         "tokens": tokens,
@@ -201,8 +207,9 @@ def markdown(data: dict[str, Any]) -> str:
         "",
         "## Units",
         "",
-        "| unit | harness | status | build | review | fix | light | land | fix rounds | events |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| unit | harness | status | build | review | fix | light | land | fix rounds "
+        "| build minutes | events |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for u in data["units"]:
         s = u["stages"]
@@ -212,11 +219,12 @@ def markdown(data: dict[str, Any]) -> str:
         events = ", ".join(f"{k} {v}" for k, v in sorted(u["events"].items())) or "-"
         out.append(
             f"| {u['unit']} | {u['harness']} | {u['status']} | {' | '.join(cells)} "
-            f"| {u['fix_rounds']} | {events} |"
+            f"| {u['fix_rounds']} | {u['build_minutes']:g} | {events} |"
         )
     out += [
         "",
-        "Stage times are minutes.",
+        "Stage times are minutes. Build minutes are the forge's, when the land adapter "
+        "reports them.",
         "",
         "## Reviewers",
         "",

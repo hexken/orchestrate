@@ -14,6 +14,7 @@ from orchestrate.registry import Unit, Workspace
 from orchestrate.scaffold import TEMPLATES
 from orchestrate.verdict import verdict
 
+BUILD_MINUTES = re.compile(r"^BUILD-MINUTES\s+(\d+(?:\.\d+)?)\s*$", re.M)
 FIXES = re.compile(r"^\W*#*\W*fixes\b", re.M | re.I)
 PRINT_DELIVER = (
     "Write no file: your whole final answer is the review, in Markdown, and it is saved for "
@@ -323,6 +324,17 @@ def merge(ctx: Ctx, unit: Unit, force: bool = False) -> None:
     ctx.ws.mark(unit, f"merged PR #{pr}")
 
 
+def record_minutes(ctx: Ctx, unit: Unit) -> None:
+    info = unit.get("jobs", {}).get("land")
+    if not info or unit.get("minutes_read") == info["log"] or ctx.fx.job(unit, "land") is None:
+        return
+    unit["minutes_read"] = info["log"]
+    log = Path(info["log"])
+    found = BUILD_MINUTES.findall(log.read_text()) if log.exists() else []
+    if found:
+        ctx.ws.mark(unit, f"build minutes {float(found[-1]):g}")
+
+
 def landed(ctx: Ctx, unit: Unit) -> str | None:
     line = ctx.fx.job(unit, "land")
     if line is None:
@@ -416,6 +428,7 @@ def reviews_step(ctx: Ctx, unit: Unit) -> str | None:
 
 def step(ctx: Ctx, unit: Unit) -> str | None:
     status = unit["status"]
+    record_minutes(ctx, unit)
     if unit.get("reland") and ctx.fx.job(unit, "land") is not None:
         unit.pop("reland")
         land(ctx, unit)

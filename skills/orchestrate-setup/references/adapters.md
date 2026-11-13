@@ -21,7 +21,7 @@ Environment: `ORCH_MODEL`, `ORCH_EFFORT`, `ORCH_MODE` (`interactive` or `print`)
 |---|---|---|---|
 | `describe` | | | JSON: `forge`; optional `cli` |
 | `auth` | | Checks the forge CLI is logged in | Exit 0 when logged in |
-| `land` | `<worktree> <branch> <commit> <title> <body-file>` | Pushes through the shared push step, opens the pull request if none is open for the branch, waits for the build of the pushed commit | Last line, always one of: `LANDED PR #<n> SUCCESSFUL <sha>`, `LANDED PR #<n> FAILED <sha>`, `LANDED PR #<n> TIMEOUT <sha>`, `FAILED <step>: <detail>` (use `FAILED pr-<step>` for a forge step that may be retried) |
+| `land` | `<worktree> <branch> <commit> <title> <body-file>` | Pushes through the shared push step, opens the pull request if none is open for the branch, waits for the build of the pushed commit | Last line, always one of: `LANDED PR #<n> SUCCESSFUL <sha>`, `LANDED PR #<n> FAILED <sha>`, `LANDED PR #<n> TIMEOUT <sha>`, `FAILED <step>: <detail>` (use `FAILED pr-<step>` for a forge step that may be retried). Optional, on an earlier line: `BUILD-MINUTES <n>`, the build minutes the forge charged for this land, if its CLI or API gives them; `orch report` sums them per unit |
 | `merge` | `<pr>` | Merges the pull request; exit 0 also when it is already merged | Exit code |
 
 The shared push step: `"$ORCH_PYTHON" -m orchestrate.push <worktree> <branch> <commit> <log>`. It merges the branch and the destination into the worktree's clean push checkout, runs `[land].checks`, pushes, and prints `RESULT: PUSHED <sha>` or `RESULT: FAILED at <step>`. Environment from `orch`: `ORCH_CONFIG`, `ORCH_PYTHON`, `ORCH_DESTINATION`, `ORCH_LOGS`, `ORCH_LAND_TRIES` (polls of the build, 30 seconds apart by default, `ORCH_LAND_POLL` overrides).

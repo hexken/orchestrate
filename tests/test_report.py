@@ -36,6 +36,8 @@ def fixture(tmp_path):
             ],
             ["2026-01-01 11:15:00", "light review started at h2"],
             ["2026-01-01 11:25:00", "reviews clean"],
+            ["2026-01-01 11:30:00", "build minutes 12.5"],
+            ["2026-01-01 11:36:00", "build minutes 4"],
             ["2026-01-01 11:37:00", "merged PR #3"],
         ],
         {
@@ -77,6 +79,7 @@ def test_report(tmp_path):
         "landing": 12.0,
     }
     assert a["fix_rounds"] == 1
+    assert a["build_minutes"] == 16.5 and data["units"][1]["build_minutes"] == 0
     assert a["events"] == {"stalled": 1}
     assert a["reviews"]["A-1-second_reviewer.md"] == {
         "role": "second_reviewer",
@@ -95,7 +98,9 @@ def test_report(tmp_path):
     }
     assert data["tokens"]["builder / opus"]["input_tokens"] == 150
     assert data["tokens"]["reviewer / opus"]["output_tokens"] == 3
-    assert "| A-1 | claude | merged | 40 | 20 | 15 | 10 | 12 | 1 | stalled 1 |" in markdown(data)
+    assert "| A-1 | claude | merged | 40 | 20 | 15 | 10 | 12 | 1 | 16.5 | stalled 1 |" in markdown(
+        data
+    )
 
 
 def test_stages_without_light_review():
