@@ -29,7 +29,7 @@ class FakeFx(Effects):
         self.ancestor = True
         self.ages = {}
         self.base_at = ""
-        self.own = ["c1"]
+        self.only_merges = False
         self.fail_prompt = set()
 
     def now(self):
@@ -50,8 +50,8 @@ class FakeFx(Effects):
     def merge_base(self, unit):
         return self.base_at
 
-    def own_commits(self, unit, since):
-        return self.own
+    def merge_only(self, unit, since):
+        return self.only_merges
 
     def git(self, cwd, *args, check=True):
         return ""
@@ -307,7 +307,7 @@ def test_branch_moved_past_reviewed_head(ctx, unit):
 def test_branch_with_only_destination_merges_lands_again(ctx, unit):
     landing(ctx, unit, "LANDED PR #3 SUCCESSFUL h1")
     ctx.fx.heads["a-1"] = "h9"
-    ctx.fx.own = []
+    ctx.fx.only_merges = True
     assert tick(ctx, unit) is None
     assert unit["checked_head"] == "h9" and unit["land_head"] == "h9"
     assert unit["status"] == "landing" and ctx.fx.merged == []

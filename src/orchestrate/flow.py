@@ -350,7 +350,7 @@ def landed(ctx: Ctx, unit: Unit) -> str | None:
     head = ctx.fx.head(unit)
     if head != unit.get("checked_head", head):
         ctx.fx.fetch(unit)
-        if ctx.fx.own_commits(unit, unit["checked_head"]):
+        if not ctx.fx.merge_only(unit, unit["checked_head"]):
             return ctx.ws.wait(
                 unit,
                 "the branch moved past the reviewed head with new commits: review them, then "

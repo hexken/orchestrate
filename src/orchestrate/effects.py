@@ -68,14 +68,26 @@ class Effects:
 
     def merge_base(self, unit: Unit) -> str:
         destination = f"origin/{self.config.project.destination}"
-        return self.git(unit["worktree"], "merge-base", destination, unit["branch"], check=False)
+        found = self.git(unit["worktree"], "merge-base", destination, unit["branch"], check=False)
+        return self.git(unit["worktree"], "rev-parse", "--short", found) if found else ""
 
-    def own_commits(self, unit: Unit, since: str) -> list[str]:
-        destination = f"^origin/{self.config.project.destination}"
-        out = self.git(
-            unit["worktree"], "rev-list", "--no-merges", f"{since}..{unit['branch']}", destination
+    def merge_only(self, unit: Unit, since: str) -> bool:
+        wt, branch = unit["worktree"], unit["branch"]
+        if not self.is_ancestor(unit, since, branch):
+            return False
+        destination = f"origin/{self.config.project.destination}"
+        merged = self.git(wt, "merge-base", branch, destination, check=False)
+        if not merged:
+            return False
+        done = subprocess.run(
+            ["git", "merge-tree", "--write-tree", since, merged],
+            cwd=wt,
+            capture_output=True,
+            text=True,
+            check=False,
         )
-        return out.splitlines()
+        tree = done.stdout.split()[0] if done.returncode == 0 and done.stdout.strip() else ""
+        return bool(tree) and tree == self.git(wt, "rev-parse", f"{branch}^{{tree}}", check=False)
 
     def fetch(self, unit: Unit) -> None:
         self.git(unit["worktree"], "fetch", "-q", "origin")
