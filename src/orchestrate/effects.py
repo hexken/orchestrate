@@ -92,6 +92,14 @@ class Effects:
     def tab_close(self, tab: str) -> None:
         herdr.tab_close(tab)
 
+    def tab_create(self, cwd: str, label: str) -> tuple[str, str]:
+        workspace = self.config.herdr.workspace or os.environ.get("HERDR_WORKSPACE_ID", "")
+        return herdr.tab_create(workspace, cwd, label)
+
+    def watch(self, unit: Unit) -> None:
+        pane = herdr.split(unit["pane"], unit["worktree"], "down", 0.65)
+        herdr.pane_run(pane, f"{self.ws.root / 'bin' / 'orch'} watch {unit['unit']}")
+
     def harness(self, role_name: str) -> Harness:
         role = self.config.roles[role_name]
         return Harness(adapter_path(self.ws.root, "harness", role.harness))

@@ -423,3 +423,124 @@ def step(ctx: Ctx, unit: Unit) -> str | None:
     if status == "landing":
         return landed(ctx, unit)
     return None
+
+
+UNIT_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,30}")
+
+
+def start_unit(
+    ctx: Ctx,
+    unit_id: str,
+    worktree: str,
+    plan: str,
+    role: str = "builder",
+    scope: str | None = None,
+) -> Unit:
+    if not UNIT_ID.fullmatch(unit_id):
+        raise RuntimeError("a unit name is letters, digits and dashes, at most 31 characters")
+    if role not in ctx.config.roles:
+        raise RuntimeError(f"no role {role!r} in the config")
+    worktree = str(Path(worktree).expanduser().resolve())
+    name = unit_id.lower()
+    with ctx.ws.lock():
+        units = ctx.ws.load()
+        for key, other in units.items():
+            if other["status"] not in ("merged", "closed", "error") and (
+                other["worktree"] == worktree or key == unit_id
+            ):
+                raise RuntimeError(
+                    f"{worktree} or {unit_id} is in use by {key} ({other['status']})"
+                )
+        if ctx.fx.git(worktree, "status", "--porcelain", "--untracked-files=no"):
+            raise RuntimeError(f"{worktree} has uncommitted changes")
+        unit: Unit = {
+            "unit": unit_id,
+            "name": name,
+            "role": role,
+            "harness": ctx.config.roles[role].harness,
+            "worktree": worktree,
+            "branch": f"{ctx.config.project.branch_prefix}{name}",
+            "plan": plan,
+            "scope": str(Path(scope).resolve()) if scope else None,
+            "status": "starting",
+            "started": ctx.fx.now(),
+        }
+        units[unit_id] = unit
+        ctx.ws.save(units)
+    try:
+        for old in scratch(ctx, unit, "units").glob(f"{unit_id}*.md"):
+            old.unlink()
+        ctx.fx.fetch(unit)
+        destination = f"origin/{ctx.config.project.destination}"
+        ctx.fx.git(worktree, "switch", "-q", "-C", unit["branch"], destination)
+        unit["base"] = ctx.fx.git(worktree, "rev-parse", "--short", "HEAD")
+        plan_file = ctx.ws.root / "plans" / plan
+        if not plan_file.exists():
+            plan_file.parent.mkdir(parents=True, exist_ok=True)
+            plan_file.write_text(f"# {plan_file.stem}\n\nStatus: active\n")
+        brief = scratch(ctx, unit, f"{name}-brief.txt")
+        briefs.write(ctx.ws.briefs / "builder.md", brief, values(ctx, unit), scope_of(unit))
+        unit["tab"], unit["pane"] = ctx.fx.tab_create(worktree, name)
+        ctx.fx.watch(unit)
+        unit["session"] = ctx.fx.start_agent(role, name, unit["pane"], worktree, str(brief))
+        unit.setdefault("sessions", {})[name] = unit["session"]
+        unit["status"] = "building"
+        ctx.ws.mark(unit, f"started on {unit['branch']} at {unit['base']}")
+    except BaseException as err:
+        if unit.get("tab"):
+            ctx.fx.tab_close(unit["tab"])
+        unit["status"] = "error"
+        ctx.ws.mark(unit, f"start failed: {err}")
+        raise
+    finally:
+        with ctx.ws.lock():
+            units = ctx.ws.load()
+            units[unit_id] = unit
+            ctx.ws.save(units)
+    return unit
+
+
+def restart_missing_reviews(ctx: Ctx, unit: Unit) -> None:
+    since = unit.get("reviews_started", 0)
+    required = list(unit.get("required", []))
+    missing = [
+        item
+        for item in required
+        if not fresh(Path(item["path"]), since)
+        or verdict(Path(item["path"]), ctx.config.review) in (None, "unreadable")
+    ]
+    if missing and len(missing) == len(required):
+        unit["reviews_started"] = ctx.fx.now()
+    for item in missing:
+        Path(item["path"]).unlink(missing_ok=True)
+        kind, _, who = item["producer"].partition(":")
+        if kind == "print" or ctx.fx.agent_state(who) == "gone":
+            restart_print(ctx, unit, item)
+        else:
+            ctx.fx.prompt(
+                who,
+                f"Write your review to {item['path']} as your brief says, with the verdict first.",
+            )
+
+
+def resume(ctx: Ctx, unit: Unit, status: str) -> None:
+    if status not in ("building", "reviewing", "fixing", "light", "landing"):
+        raise RuntimeError("resume to building, reviewing, fixing, light or landing")
+    unit["status"], unit["event"] = status, None
+    reset_timers(unit)
+    if status == "fixing":
+        unit["fixes_sent"] = ctx.fx.now()
+        unit.setdefault("reviewed_head", unit.get("land_head", unit["base"]))
+        unit.setdefault("review_files", unit.get("required", []))
+    if status in ("reviewing", "light"):
+        restart_missing_reviews(ctx, unit)
+    ctx.ws.mark(unit, f"resumed to {status}")
+
+
+def reland(ctx: Ctx, unit: Unit) -> None:
+    if "land" in unit.get("jobs", {}) and ctx.fx.job(unit, "land") is None:
+        pid = unit["jobs"]["land"].get("pid")
+        raise RuntimeError(f"a land of {unit['unit']} is still running (pid {pid})")
+    land(ctx, unit)
+    if unit["status"] == "waiting":
+        unit["status"], unit["event"] = "landing", None
