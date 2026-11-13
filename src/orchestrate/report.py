@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from orchestrate.registry import Workspace
+from orchestrate.verdict import finding_items
 
 STAGES = (
     ("building", "started on", "summary written"),
@@ -28,7 +29,13 @@ EVENT_KINDS = (
     ("error", "error:"),
 )
 FINDING = re.compile(r"^\s*(?:\d+[.)]|[-*])\s+.*?[\w./-]+\.\w+:\d+")
-FIX_LINE = re.compile(r"(?P<file>[\w.-]+\.md)\s+#(?P<n>\d+):\s*(?P<what>fixed|declined)", re.I)
+FIXES_HEADING = re.compile(r"^\W*#*\W*fixes\b", re.I)
+FIX_ITEM = re.compile(
+    r"^(?:[-*]|\d+[.)])\s+[*_`]*(?P<who>[\w.-]+?)(?:\.md)?\s*#(?P<n>\d+)[*_`]*"
+    r"\s*(?:\((?P<severity>[^)]*)\))?(?P<rest>.*)$"
+)
+STATUS = re.compile(r":[*_`\s]*(fixed|declined|deferred)\b(?!-)", re.I)
+OUTCOMES = ("fixed", "declined", "deferred")
 USAGE_KEYS = (
     "input_tokens",
     "output_tokens",
@@ -63,17 +70,47 @@ def event_kind(why: str) -> str:
 def findings(path: Path) -> int:
     if not path.exists():
         return 0
-    return sum(1 for line in path.read_text().splitlines() if FINDING.match(line))
+    text = path.read_text()
+    items = finding_items(text)
+    if items is not None:
+        return len(items)
+    return sum(1 for line in text.splitlines() if FINDING.match(line))
 
 
-def fixes(summary: Path) -> list[tuple[str, str]]:
+def fixes_section(text: str) -> list[str]:
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines) if FIXES_HEADING.match(line)]
+    if not starts:
+        return []
+    section = []
+    for line in lines[starts[-1] + 1 :]:
+        if line.startswith("#"):
+            break
+        section.append(line)
+    return section
+
+
+def fixes(summary: Path, unit: str = "") -> list[dict[str, str]]:
     if not summary.exists():
         return []
-    text = summary.read_text()
-    part = re.split(r"^#+\s*fixes\b.*$", text, flags=re.M | re.I)
-    if len(part) < 2:
-        return []
-    return [(m["file"], m["what"].lower()) for m in FIX_LINE.finditer(part[-1])]
+    result = []
+    for line in fixes_section(summary.read_text()):
+        item = FIX_ITEM.match(line)
+        if not item:
+            continue
+        outcomes = STATUS.findall(item["rest"])
+        if not outcomes:
+            continue
+        who = item["who"].removeprefix(f"{unit}-") if unit else item["who"]
+        result.append(
+            {
+                "reviewer": who,
+                "n": item["n"],
+                "severity": (item["severity"] or "unlabelled").strip().lower(),
+                "outcome": outcomes[-1].lower(),
+            }
+        )
+    return result
 
 
 def usage(transcript: Path) -> dict[str, dict[str, int]]:
@@ -110,10 +147,15 @@ def unit_report(folder: Path) -> dict[str, Any]:
             "findings": findings(review),
             "fixed": 0,
             "declined": 0,
+            "deferred": 0,
+            "severities": {},
         }
-    for name, what in fixes(folder / f"{unit['unit']}.md"):
-        if name in reviews:
-            reviews[name][what] += 1
+    for fix in fixes(folder / f"{unit['unit']}.md", unit["unit"]):
+        row = reviews.get(f"{unit['unit']}-{fix['reviewer']}.md")
+        if row is None:
+            continue
+        row[fix["outcome"]] += 1
+        row["severities"][fix["severity"]] = row["severities"].get(fix["severity"], 0) + 1
     tokens: dict[str, dict[str, dict[str, int]]] = {}
     for transcript in folder.glob("*.jsonl"):
         tokens[role_of(unit, transcript.stem)] = usage(transcript)
@@ -137,14 +179,14 @@ def build(ws: Workspace, since: str | None = None) -> dict[str, Any]:
         if since is None or first >= since:
             units.append(report)
     by_role: dict[str, dict[str, int]] = defaultdict(
-        lambda: {"findings": 0, "fixed": 0, "declined": 0, "reviews": 0}
+        lambda: {"findings": 0, "fixed": 0, "declined": 0, "deferred": 0, "reviews": 0}
     )
     tokens: dict[str, dict[str, int]] = defaultdict(lambda: dict.fromkeys(USAGE_KEYS, 0))
     for report in units:
         for review in report["reviews"].values():
             row = by_role[review["role"]]
             row["reviews"] += 1
-            for key in ("findings", "fixed", "declined"):
+            for key in ("findings", *OUTCOMES):
                 row[key] += review[key]
         for role, models in report["tokens"].items():
             for model, counts in models.items():
@@ -178,12 +220,13 @@ def markdown(data: dict[str, Any]) -> str:
         "",
         "## Reviewers",
         "",
-        "| role | reviews | findings | fixed | declined |",
-        "|---|---|---|---|---|",
+        "| role | reviews | findings | fixed | declined | deferred |",
+        "|---|---|---|---|---|---|",
     ]
     for role, r in sorted(data["reviewers"].items()):
         out.append(
-            f"| {role} | {r['reviews']} | {r['findings']} | {r['fixed']} | {r['declined']} |"
+            f"| {role} | {r['reviews']} | {r['findings']} | {r['fixed']} | {r['declined']} "
+            f"| {r['deferred']} |"
         )
     out += [
         "",

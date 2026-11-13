@@ -83,8 +83,16 @@ def test_report(tmp_path):
         "findings": 2,
         "fixed": 2,
         "declined": 0,
+        "deferred": 0,
+        "severities": {"unlabelled": 2},
     }
-    assert data["reviewers"]["reviewer"] == {"findings": 1, "fixed": 0, "declined": 1, "reviews": 2}
+    assert data["reviewers"]["reviewer"] == {
+        "findings": 1,
+        "fixed": 0,
+        "declined": 1,
+        "deferred": 0,
+        "reviews": 2,
+    }
     assert data["tokens"]["builder / opus"]["input_tokens"] == 150
     assert data["tokens"]["reviewer / opus"]["output_tokens"] == 3
     assert "| A-1 | claude | merged | 40 | 20 | 15 | 10 | 12 | 1 | stalled 1 |" in markdown(data)
@@ -118,3 +126,68 @@ def test_report_cli_json(project, capsys):
     fixture(project["ws"])
     assert main(["--config", str(project["config"]), "report", "--json"]) == 0
     assert len(json.loads(capsys.readouterr().out)["units"]) == 2
+
+
+RED = "; fails without the fix: "
+SUMMARY = (
+    "# A-1\nbuilt it\n\n## Fixes\n"
+    f"- reviewer #1 (high): concurrent commit corrupts a version: fixed in 0eb0f21{RED}test_race\n"
+    "  - the lock is taken before the read\n"
+    "- reviewer #2 (medium): reader returns None for an empty member: "
+    f"fixed in 1b590ea, 2c4d6e8{RED}test_empty_member\n"
+    "- **second_reviewer #1 (low): fixed-size buffer: notes**: declined: out of scope\n"
+    "- reviewer #3 (nit): wording: deferred: INBOX for a later unit\n"
+    f"- light #1 (medium): the fix misses the retry path: fixed in 3d5f7a9{RED}test_retry\n"
+    "- Merged origin/main at 9e8d7c6 (no conflicts).\n"
+    "- Checks: ruff, mypy, pytest pass.\n"
+    "\n## Notes\n"
+    "- reviewer #9 (low): not a fix line: fixed in abc\n"
+)
+
+
+def test_fixes_lines_parsed(tmp_path):
+    from orchestrate.report import fixes
+
+    path = tmp_path / "A-1.md"
+    path.write_text(SUMMARY)
+    assert fixes(path, "A-1") == [
+        {"reviewer": "reviewer", "n": "1", "severity": "high", "outcome": "fixed"},
+        {"reviewer": "reviewer", "n": "2", "severity": "medium", "outcome": "fixed"},
+        {"reviewer": "second_reviewer", "n": "1", "severity": "low", "outcome": "declined"},
+        {"reviewer": "reviewer", "n": "3", "severity": "nit", "outcome": "deferred"},
+        {"reviewer": "light", "n": "1", "severity": "medium", "outcome": "fixed"},
+    ]
+
+
+def test_old_fixes_shape_still_parsed(tmp_path):
+    from orchestrate.report import fixes
+
+    path = tmp_path / "A-1.md"
+    path.write_text("**Fixes**\n- A-1-reviewer.md #2: declined: wrong\n")
+    assert fixes(path, "A-1") == [
+        {"reviewer": "reviewer", "n": "2", "severity": "unlabelled", "outcome": "declined"}
+    ]
+
+
+def test_review_yield_with_light_review(tmp_path):
+    ws = Workspace(tmp_path)
+    unit_folder(
+        ws,
+        {"unit": "A-1", "name": "a-1", "harness": "claude", "status": "merged"},
+        [["2026-01-01 10:00:00", "started on agent/a-1 at b0"]],
+        {
+            "A-1.md": SUMMARY,
+            "A-1-reviewer.md": "changes needed\n## Findings\n1. high race\n2. medium None\n"
+            "3. nit wording\n",
+            "A-1-second_reviewer.md": "hold\n## Findings\n1. low buffer\n",
+            "A-1-light.md": "hold\n## Findings\n1. retry path missed\n   - detail\n",
+        },
+    )
+    reviews = build(ws)["units"][0]["reviews"]
+    assert reviews["A-1-reviewer.md"]["findings"] == 3
+    assert reviews["A-1-reviewer.md"]["fixed"] == 2
+    assert reviews["A-1-reviewer.md"]["deferred"] == 1
+    assert reviews["A-1-reviewer.md"]["severities"] == {"high": 1, "medium": 1, "nit": 1}
+    assert reviews["A-1-second_reviewer.md"]["declined"] == 1
+    assert reviews["A-1-light.md"]["findings"] == 1
+    assert reviews["A-1-light.md"]["fixed"] == 1
