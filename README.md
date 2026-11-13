@@ -82,6 +82,8 @@ A running supervisor reads the config once, at start: after editing `orchestrate
 | | `timeout_minutes` | How long a land waits for the build |
 | | `theirs_on_conflict` | Files where the destination's version wins a merge conflict |
 | | `commit_paths` | Files the checks write that are committed before the push |
+| | `ci_config` | The forge's CI file, relative to the repository; `orch doctor` lists each CI command with no counterpart in `checks` |
+| | `ci_ignore` | Regexes: a CI command, or a CI line `orch doctor` cannot parse, that matches one needs no local counterpart (installs, deploys) |
 | `[timeouts]` | `stall_minutes` | An idle agent with nothing new for this long is an event |
 | | `wedged_minutes` | A "working" agent whose transcript is silent this long is an event |
 | | `job_hours` | A background job running longer is an event |
@@ -93,7 +95,7 @@ A running supervisor reads the config once, at start: after editing `orchestrate
 | | `verdict_lines` | A bare verdict line must come within this many lines |
 | | `context` | Files copied into a print-mode reviewer's throwaway worktree |
 | `[roles.<role>]` | `harness`, `model`, `effort`, `mode` | One per role; `mode` is `interactive` or `print` |
-| `[pipeline.<harness>]` | `reviews`, `light` | Reviews a unit built on that harness gets, and its light reviewer |
+| `[pipeline.<harness>]` | `reviews`, `light` | Reviews a unit built on that harness gets, and its light reviewer of the fixes (empty, the default: none; the fixes land with every check re-run) |
 | `[sources]` | `impl_docs` | `deferred` while implementation docs wait for the end; `maintained` otherwise |
 | `[[sources.entries]]` | `path`, `kind`, `owner`, `compact`, `root` | A file or glob; kind `spec`, `plan`, `bookkeeping`, `memory`, `log`, `code` or `docs`; owner `owner` or `agent`; compact `conservative`, `full` or `none`; root `impl`, `planning` or `workspace` (absolute and `~` paths stand alone) |
 | `[[homes]]` | `question`, `path`, `root` | The one home of each kind of fact |

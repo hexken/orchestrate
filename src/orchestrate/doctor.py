@@ -5,6 +5,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from orchestrate import ci
 from orchestrate.adapters import AdapterError, Harness, Land, adapter_path
 from orchestrate.config import Config
 
@@ -115,10 +116,42 @@ def adapters(config: Config) -> list[Line]:
     return lines
 
 
+def ci_steps(config: Config) -> list[Line]:
+    path = config.land.ci_config
+    if path is None:
+        return []
+    if not path.exists():
+        return [Line("missing", f"CI config {path}", "fix land.ci_config")]
+    found = ci.steps(path.read_text())
+    ignore = config.land.ci_ignore
+    lines = [
+        Line("fail", f"CI line {number} not parsed ({why}): {text}", "check it by hand")
+        for number, text, why in found.unparsed
+        if not ci.ignored(text, ignore)
+    ]
+    if not found.commands:
+        lines.append(
+            Line(
+                "fail",
+                f"CI config {path.name}: no steps found",
+                "compare it with land.checks by hand",
+            )
+        )
+    for command in ci.uncovered(found.commands, config.land.checks, ignore):
+        lines.append(
+            Line(
+                "missing",
+                f"CI step with no local check: {command}",
+                "add it to land.checks, or to land.ci_ignore if it only belongs in CI",
+            )
+        )
+    return lines or [Line("ok", f"CI steps of {path.name} covered by land.checks")]
+
+
 def run(config: Config | None) -> tuple[list[Line], int]:
     lines = basics()
     if config is None:
         lines.append(Line("missing", "orchestrate.toml", "run the orchestrate-setup skill"))
     else:
-        lines += repository(config) + adapters(config)
+        lines += repository(config) + adapters(config) + ci_steps(config)
     return lines, 0 if all(line.state == "ok" for line in lines) else 1

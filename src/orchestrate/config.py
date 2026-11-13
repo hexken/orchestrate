@@ -42,6 +42,8 @@ class Land:
     timeout_minutes: int = 60
     theirs_on_conflict: tuple[str, ...] = ()
     commit_paths: tuple[str, ...] = ()
+    ci_config: Path | None = None
+    ci_ignore: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -261,7 +263,14 @@ def load(path: Path) -> Config:
     workspace = expand(raw_project.get("workspace", ".orchestrate"), repo)
     raw_land = table(data, "land")
     lock = raw_land.get("heavy_lock")
-    land = build(Land, raw_land, "land", heavy_lock=expand(lock, base) if lock else None)
+    ci = raw_land.get("ci_config")
+    land = build(
+        Land,
+        raw_land,
+        "land",
+        heavy_lock=expand(lock, base) if lock else None,
+        ci_config=expand(ci, repo) if ci else None,
+    )
     gate = table(data, "spec_gate")
     spec = gate.get("spec")
     spec_gate = build(SpecGate, gate, "spec_gate", spec=expand(spec, base) if spec else None)
