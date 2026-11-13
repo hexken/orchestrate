@@ -45,6 +45,9 @@ CASES = [
     ("clean\n## Findings\n```sh\n# comment\n```\n- race\n", "hold"),
     ("clean\n## Findings\nNone.\n```\nx = 1\n```\n", "clean"),
     ("clean\n## Findings\nNo findings.\n", "clean"),
+    ("clean\n**No findings.**\n", "clean"),
+    ("clean\n## Findings: none\n", "clean"),
+    ("clean\n## Findings\n### High\n- None.\n### Medium\n- None\n", "clean"),
     ("", None),
 ]
 
@@ -63,7 +66,7 @@ def test_finding_items():
     assert finding_items(text) == ["1. a.py:1 bug", "2. None of the rows load"]
     assert finding_items("clean\n- a.py:1 bug\n") is None
     text = "hold\n## Findings\n### 1. race\nThe lock is late.\n### 2. gap\n## Commands\n- x\n"
-    assert finding_items(text) == ["The lock is late.", "### 2. gap"]
+    assert finding_items(text) == ["### 1. race", "### 2. gap"]
     severities = "hold\n## Findings\n### High\n1. a\n2. b\n### Medium\n1. c\n"
     assert finding_items(severities) == ["1. a", "2. b", "1. c"]
     detail = "hold\n## Findings\n1. race\n   the lock is late\n   - nested\n2. gap\nmore of 2\n"
@@ -106,3 +109,39 @@ def test_verdict_line_anywhere(tmp_path):
     path = tmp_path / "review.md"
     path.write_text("progress\n" * 70 + "Verdict: hold\n")
     assert verdict(path, Review()) == "hold"
+
+
+def test_paragraphs_are_ignored_once_a_section_has_a_list():
+    from orchestrate.verdict import finding_items
+
+    text = (
+        "hold\n## Findings\nTwo issues, most serious first:\n\n"
+        "1. high: race in commit\n\n   The lock is taken late.\n\n"
+        "A detail paragraph after a blank line.\n\n2. low: wording\n"
+    )
+    assert finding_items(text) == ["1. high: race in commit", "2. low: wording"]
+    assert finding_items("hold\n## Findings\nThe route answers 500.\n") == [
+        "The route answers 500."
+    ]
+
+
+def test_a_severity_heading_with_only_none_is_dropped():
+    from orchestrate.verdict import finding_items
+
+    text = "hold\n## Findings\n### High\n- None.\n### Low\n1. wording\n"
+    assert finding_items(text) == ["1. wording"]
+
+
+def test_findings_carry_their_severity():
+    from orchestrate.verdict import findings
+
+    text = (
+        "hold\n## Findings\n### High\n1. race\n### Medium\n1. gap\n"
+        "## Other findings\n1. low-level detail, nit: naming\n2. something\n"
+    )
+    assert [(f.text, f.severity) for f in findings(text)] == [
+        ("1. race", "high"),
+        ("1. gap", "medium"),
+        ("1. low-level detail, nit: naming", "nit"),
+        ("2. something", None),
+    ]

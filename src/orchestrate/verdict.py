@@ -1,4 +1,5 @@
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from orchestrate.config import Review
@@ -41,25 +42,43 @@ def is_rule(line: str) -> bool:
     return line.startswith("|") and bool(TABLE_RULE.match(line))
 
 
+SEVERITY = re.compile(r"(?<![\w-])(high|medium|low|nit|critical|blocking)(?![\w-])", re.I)
+NONE_TITLE = re.compile(r"^[\W_]*(?:no findings|findings[\W_]*none|none)[\W_]*$", re.I)
+
+
+@dataclass(frozen=True)
+class Finding:
+    text: str
+    severity: str | None
+
+
+def severity_of(text: str | None) -> str | None:
+    found = SEVERITY.search(text or "")
+    return found.group(1).lower() if found else None
+
+
 class Section:
     def __init__(self) -> None:
-        self.items: list[str] = []
+        self.items: list[Finding] = []
+        self.paragraphs: list[Finding] = []
         self.sub: str | None = None
-        self.sub_count = 0
+        self.sub_items = 0
+        self.sub_none = False
         self.indent: int | None = None
         self.last = "blank"
 
     def add(self, text: str) -> None:
-        self.items.append(text)
-        self.sub_count += 1
+        self.items.append(Finding(text, severity_of(text) or severity_of(self.sub)))
+        self.sub_items += 1
 
     def open_sub(self, text: str | None) -> None:
         self.close_sub()
-        self.sub, self.sub_count, self.indent, self.last = text, 0, None, "blank"
+        self.sub, self.sub_items, self.sub_none = text, 0, False
+        self.indent, self.last = None, "blank"
 
     def close_sub(self) -> None:
-        if self.sub and not self.sub_count:
-            self.items.append(self.sub)
+        if self.sub and not self.sub_items and not self.sub_none:
+            self.items.append(Finding(self.sub, severity_of(self.sub)))
         self.sub = None
 
     def line(self, line: str, following: str) -> None:
@@ -72,7 +91,9 @@ class Section:
             indent = len(item["indent"])
             if self.indent is None or indent <= self.indent:
                 self.indent = indent
-                if not NONE_ONLY.match(item["text"]):
+                if NONE_ONLY.match(item["text"]):
+                    self.sub_none = True
+                else:
                     self.add(stripped)
             self.last = "item"
             return
@@ -83,15 +104,21 @@ class Section:
         if self.last != "blank":
             return
         self.last = "para"
-        if not NONE_ONLY.match(stripped):
-            self.add(stripped)
+        if NONE_ONLY.match(stripped):
+            self.sub_none = True
+        elif self.sub is None:
+            self.paragraphs.append(Finding(stripped, severity_of(stripped)))
+
+    def result(self) -> list[Finding]:
+        self.close_sub()
+        return self.items or self.paragraphs
 
 
-def finding_items(text: str) -> list[str] | None:
+def findings(text: str) -> list[Finding] | None:
     lines = text.splitlines()
     section: Section | None = None
     level = 0
-    found = Section()
+    result: list[Finding] = []
     seen = fence = False
     for index, line in enumerate(lines):
         if FENCE.match(line):
@@ -106,17 +133,24 @@ def finding_items(text: str) -> list[str] | None:
                 section.open_sub(None if NONE_ONLY.match(title) else line.strip())
                 continue
             if section is not None:
-                section.close_sub()
+                result += section.result()
             section = None
             if FINDINGS_WORD.search(title):
-                section, level, seen = found, depth, True
-                section.open_sub(None)
+                seen = True
+                if not NONE_TITLE.match(title):
+                    section, level = Section(), depth
             continue
         if section is not None:
             following = lines[index + 1] if index + 1 < len(lines) else ""
             section.line(line, following)
-    found.close_sub()
-    return found.items if seen else None
+    if section is not None:
+        result += section.result()
+    return result if seen else None
+
+
+def finding_items(text: str) -> list[str] | None:
+    found = findings(text)
+    return None if found is None else [f.text for f in found]
 
 
 def verdict(path: Path, review: Review) -> str | None:
