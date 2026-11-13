@@ -139,6 +139,7 @@ class Config:
     workspace: Path
     herdr: Herdr = field(default_factory=Herdr)
     worktrees: tuple[Path, ...] = ()
+    share: tuple[str, ...] = ()
     land: Land = field(default_factory=Land)
     timeouts: Timeouts = field(default_factory=Timeouts)
     review: Review = field(default_factory=Review)
@@ -266,6 +267,7 @@ def load(path: Path) -> Config:
             expand(p, base)
             for p in strings(table(data, "worktrees").get("paths", []), "worktrees.paths")
         ),
+        share=strings(table(data, "worktrees").get("share", []), "worktrees.share"),
         land=land,
         timeouts=build(Timeouts, table(data, "timeouts"), "timeouts"),
         review=build(

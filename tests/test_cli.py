@@ -97,3 +97,12 @@ def test_roles_table(fake_env, project, capsys):
 def test_conform_harness_example(fake_env, project, capsys):
     assert main(["--config", str(project["config"]), "conform", "harness", "claude"]) == 0
     assert "conforms" in capsys.readouterr().out
+
+
+def test_every_verb_dispatches():
+    import argparse
+
+    from orchestrate.cli import COMMANDS, STANDALONE, parser
+
+    sub = next(a for a in parser()._actions if isinstance(a, argparse._SubParsersAction))
+    assert set(sub.choices) == set(COMMANDS) | set(STANDALONE)

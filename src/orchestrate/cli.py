@@ -9,7 +9,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from orchestrate import conform, doctor, flow, scaffold, watch
+from orchestrate import conform, doctor, flow, scaffold, watch, worktrees
 from orchestrate.adapters import Harness, Land, adapter_path
 from orchestrate.config import ConfigError, load
 from orchestrate.effects import Effects
@@ -224,6 +224,12 @@ def cmd_scaffold(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_worktrees(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    for line in worktrees.create(ctx.config, args.count):
+        print(line)
+    return 0
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -237,7 +243,10 @@ COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "note": cmd_note,
     "roles": cmd_roles,
     "conform": cmd_conform,
+    "watch": cmd_watch,
+    "worktrees": cmd_worktrees,
 }
+STANDALONE = ("doctor", "scaffold")
 
 
 def parser() -> argparse.ArgumentParser:
@@ -256,6 +265,8 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--once", action="store_true")
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
+    trees = sub.add_parser("worktrees", help="create unit worktrees and their push checkouts")
+    trees.add_argument("--count", type=int, default=2)
     sub.add_parser("doctor", help="check the prerequisites")
     build = sub.add_parser("scaffold", help="write the .orchestrate workspace into a repository")
     build.add_argument("--repo", required=True)
