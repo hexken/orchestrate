@@ -12,8 +12,9 @@ from orchestrate.config import Config
 from orchestrate.effects import EffectError, Effects, matches
 from orchestrate.registry import Unit, Workspace
 from orchestrate.scaffold import TEMPLATES
-from orchestrate.verdict import FIXES_HEADING, verdict
+from orchestrate.verdict import FIXES_HEADING, findings, verdict
 
+LOW = ("low", "nit")
 MOVED = "the branch moved past the reviewed head with new commits"
 BUILD_MINUTES = re.compile(r"^BUILD-MINUTES\s+(\d+(?:\.\d+)?)\s*$", re.M)
 FIXES = FIXES_HEADING
@@ -453,19 +454,35 @@ def reviews_step(ctx: Ctx, unit: Unit) -> str | None:
     return landed(ctx, unit)
 
 
+def expected_findings(unit: Unit) -> dict[tuple[str, str], str | None]:
+    expected: dict[tuple[str, str], str | None] = {}
+    for item in unit.get("review_files", []):
+        path = Path(item["path"])
+        reviewer = path.stem.removeprefix(f"{unit['unit']}-")
+        found = findings(path.read_text()) if path.exists() else []
+        if found is None:
+            labels: list[str | None] = [None] * report.findings(path)
+        else:
+            labels = [f.severity for f in found]
+        for number, label in enumerate(labels, 1):
+            expected[(reviewer, str(number))] = label
+    return expected
+
+
 def unsettled(unit: Unit, summary_path: Path) -> str | None:
-    lines = report.fixes(summary_path, unit["unit"])
-    total = sum(report.findings(Path(f["path"])) for f in unit.get("review_files", []))
+    expected = expected_findings(unit)
+    answered = {(f["reviewer"], f["n"]): f for f in report.fixes(summary_path, unit["unit"])}
     after = "check them, then `resume <UNIT> landing --accept-head` or `resume <UNIT> fixing`"
     open_ = [
-        f"{f['reviewer']} #{f['n']} ({f['severity']}, {f['outcome']})"
-        for f in lines
-        if f["outcome"] in ("declined", "deferred") and f["severity"] in ("high", "medium")
+        f"{who} #{n} ({expected.get((who, n)) or 'unlabelled'}, {f['outcome']})"
+        for (who, n), f in answered.items()
+        if f["outcome"] in ("declined", "deferred") and expected.get((who, n)) not in LOW
     ]
     if open_:
         return f"unsettled fixes: {', '.join(open_)}: {after}"
-    if len(lines) < total:
-        return f"unsettled fixes: {len(lines)} Fixes lines for {total} findings: {after}"
+    missing = [f"{who} #{n}" for who, n in expected if (who, n) not in answered]
+    if missing:
+        return f"unsettled fixes: no Fixes line for {', '.join(missing)}: {after}"
     return None
 
 

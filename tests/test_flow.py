@@ -264,7 +264,39 @@ def test_missing_fixes_lines_are_an_event(ctx, unit):
     event = fixes_in(
         ctx, unit, TWO, "- reviewer #1 (high): race: fixed in h2; fails without the fix: test_r\n"
     )
-    assert "unsettled fixes: 1 Fixes lines for 2 findings" in event
+    assert "unsettled fixes: no Fixes line for reviewer #2" in event
+
+
+def test_a_high_finding_relabelled_low_and_declined_is_an_event(ctx, unit):
+    event = fixes_in(
+        ctx,
+        unit,
+        TWO,
+        "- reviewer #1 (low): race: declined: by design\n"
+        "- reviewer #2 (low): wording: fixed in h2; fails without the fix: test_w\n",
+    )
+    assert "unsettled fixes: reviewer #1 (high, declined)" in event
+
+
+def test_declining_an_unlabelled_finding_is_an_event(ctx, unit):
+    event = fixes_in(
+        ctx,
+        unit,
+        "changes needed\n## Findings\n1. the import drops a turn\n",
+        "- reviewer #1 (nit): drops a turn: declined: rare\n",
+    )
+    assert "reviewer #1 (unlabelled, declined)" in event
+
+
+def test_answers_are_matched_by_number_not_counted(ctx, unit):
+    event = fixes_in(
+        ctx,
+        unit,
+        TWO,
+        "- reviewer #1 (high): race: fixed in h2; fails without the fix: test_r\n"
+        "- reviewer #3 (low): extra: fixed in h2; fails without the fix: test_x\n",
+    )
+    assert "no Fixes line for reviewer #2" in event
 
 
 def test_a_deferred_low_finding_still_lands(ctx, unit):
