@@ -108,3 +108,21 @@ def test_doctor_ci_covered_unset_and_unparsable(tmp_path):
     assert [line.state for line in ci_steps(cfg)] == ["ok"]
     cfg = config(tmp_path, 'ci_config = "gone.yml"\n')
     assert [line.state for line in ci_steps(cfg)] == ["missing"]
+
+
+ALL = 'checks = ["uv run ruff check . && uv run pytest -q && uv run mypy"]\n'
+
+
+def test_uses_steps_are_reported_until_ignored(tmp_path):
+    cfg = config(
+        tmp_path,
+        'ci_config = "ci.yml"\n' + ALL,
+    )
+    (tmp_path / "myapp" / "ci.yml").write_text(ACTIONS)
+    lines = ci_steps(cfg)
+    assert [line.state for line in lines] == ["fail"] and "uses" in lines[0].what
+    cfg = config(
+        tmp_path,
+        'ci_config = "ci.yml"\n' + ALL + 'ci_ignore = ["actions/checkout"]\n',
+    )
+    assert [line.state for line in ci_steps(cfg)] == ["ok"]

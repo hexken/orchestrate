@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass, field
 
 COMMAND_KEYS = ("script", "run", "commands")
-NOT_FOLLOWED = ("include", "extends")
+NOT_FOLLOWED = ("include", "extends", "uses")
 KEY = re.compile(r"^(?P<lead>\s*(?:-\s+)?)(?P<key>[\w-]+):(?:\s+(?P<value>.*?))?\s*$")
 ITEM = re.compile(r"^(?P<lead>\s*)-\s+(?P<value>.*?)\s*$")
 BLOCK = ("|", ">", "|-", ">-", "|+", ">+")
