@@ -531,6 +531,22 @@ def test_a_queued_refresh_goes_out_when_the_reviews_are_clean(ctx, unit):
     assert "refresh_pending" not in unit
 
 
+def test_a_queued_refresh_goes_out_on_resume(ctx, unit):
+    queued(ctx, unit)
+    ctx.ws.wait(unit, "reviewer a-1-reviewer is gone")
+    flow.resume(ctx, unit, "fixing")
+    assert [name for name, _ in ctx.fx.prompts] == ["a-1"] and "refresh_pending" not in unit
+
+
+def test_no_refresh_for_a_unit_that_merges_in_the_same_step(ctx, unit):
+    paths = queued(ctx, unit)
+    for path in paths.values():
+        write(ctx, path, "clean\n")
+    finish(unit, "land", "LANDED PR #3 SUCCESSFUL h1")
+    assert tick(ctx, unit) == "merged"
+    assert ctx.fx.prompts == [] and "refresh_pending" not in unit
+
+
 def test_refresh_uses_the_project_brief(ctx, unit):
     (ctx.ws.briefs / "refresh.md").write_text("<MERGED> is in <DESTINATION> (<PR>): merge it.\n")
     units = {"A-1": {**unit, "status": "merged", "pr": "7"}, "B-1": {**unit, "name": "b-1"}}

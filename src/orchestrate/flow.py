@@ -451,8 +451,12 @@ def reviews_step(ctx: Ctx, unit: Unit) -> str | None:
         return None
     unit["status"] = "landing"
     ctx.ws.mark(unit, "reviews clean")
-    send_refresh(ctx, unit)
-    return landed(ctx, unit)
+    event = landed(ctx, unit)
+    if event == "merged":
+        unit.pop("refresh_pending", None)
+    else:
+        send_refresh(ctx, unit)
+    return event
 
 
 def expected_findings(unit: Unit) -> dict[tuple[str, str], str | None]:
@@ -650,6 +654,8 @@ def resume(ctx: Ctx, unit: Unit, status: str, accept_head: bool = False) -> None
         unit.setdefault("review_files", unit.get("required", []))
     if status in ("reviewing", "light"):
         restart_missing_reviews(ctx, unit)
+    else:
+        send_refresh(ctx, unit)
     if status == "landing" and (accept_head or moved):
         unit["checked_head"] = ctx.fx.head(unit)
         ctx.ws.mark(unit, f"resumed to landing; accepted {unit['checked_head']} as checked")
