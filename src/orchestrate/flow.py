@@ -378,6 +378,7 @@ def landed(ctx: Ctx, unit: Unit) -> str | None:
     if head != unit.get("checked_head", head):
         ctx.fx.fetch(unit)
         if not ctx.fx.merge_only(unit, unit["checked_head"]):
+            unit["moved_head"] = head
             return ctx.ws.wait(
                 unit,
                 f"{MOVED}: review them, then `resume <UNIT> landing` (it lands the current "
@@ -634,6 +635,13 @@ def resume(ctx: Ctx, unit: Unit, status: str, accept_head: bool = False) -> None
     if status == "light" and not ctx.config.pipeline[unit["harness"]].light:
         raise RuntimeError(f"the {unit['harness']} pipeline has no light review")
     moved = str(unit.get("event") or "").startswith(MOVED)
+    if status == "landing" and moved and not accept_head:
+        now = ctx.fx.head(unit)
+        if now != unit.get("moved_head"):
+            raise RuntimeError(
+                f"the head moved again since the event (was {unit.get('moved_head')}, now "
+                f"{now}): check it, then resume with --accept-head"
+            )
     unit["status"], unit["event"] = status, None
     reset_timers(unit)
     if status == "fixing":

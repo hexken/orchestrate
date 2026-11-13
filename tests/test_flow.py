@@ -438,6 +438,19 @@ def test_resume_landing_accepts_the_head_when_asked(ctx, unit):
     assert any("accepted h9" in what for _, what in unit["timeline"])
 
 
+def test_a_head_that_moved_again_since_the_event_is_not_accepted(ctx, unit):
+    landing(ctx, unit, "LANDED PR #3 SUCCESSFUL h1")
+    ctx.fx.heads["a-1"] = "h9"
+    assert "moved past" in tick(ctx, unit)
+    assert unit["moved_head"] == "h9"
+    ctx.fx.heads["a-1"] = "h10"
+    with pytest.raises(RuntimeError, match="h9.*h10"):
+        flow.resume(ctx, unit, "landing")
+    assert unit["status"] == "waiting" and unit["checked_head"] == "h1"
+    flow.resume(ctx, unit, "landing", accept_head=True)
+    assert unit["checked_head"] == "h10"
+
+
 def test_reviews_diff_against_the_merge_base(ctx, unit):
     ctx.fx.base_at = "mb7"
     build_done(ctx, unit)
