@@ -9,7 +9,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from orchestrate import conform, flow, watch
+from orchestrate import conform, doctor, flow, watch
 from orchestrate.adapters import Harness, Land, adapter_path
 from orchestrate.config import ConfigError, load
 from orchestrate.effects import Effects
@@ -200,6 +200,17 @@ def cmd_watch(ctx: flow.Ctx, args: argparse.Namespace) -> int:
     return watch.loop(ctx.ws, ctx.config.review, args.unit)
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    try:
+        config = load(find_config(args.config))
+    except ConfigError:
+        config = None
+    lines, code = doctor.run(config)
+    for line in lines:
+        print(line)
+    return code
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -232,6 +243,7 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--once", action="store_true")
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
+    sub.add_parser("doctor", help="check the prerequisites")
     sub.add_parser("watch", help="live view of one unit (opened in its Herdr tab)").add_argument(
         "unit"
     )
@@ -260,6 +272,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.verb is None:
         parser().print_help()
         return 0
+    if args.verb == "doctor":
+        return cmd_doctor(args)
     try:
         return COMMANDS[args.verb](context(args), args)
     except (ConfigError, RuntimeError) as err:
