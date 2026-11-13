@@ -33,6 +33,8 @@ CASES = [
     ("clean\n\n## 2. Findings\n- **high** src/a.py:3 race\n", "hold"),
     ("clean\n## Findings\n- None.\n## Commands run\n- pytest: pass\n", "clean"),
     ("Verdict: clean\n## Findings\nNone\n  - nested note\n", "clean"),
+    ("clean\n## Findings\n### 1. medium: race in commit\nThe lock is late.\n", "hold"),
+    ("clean\n## Findings\nNone.\n## Commands\n### pytest\n- pass\n", "clean"),
     ("", None),
 ]
 
@@ -50,6 +52,8 @@ def test_finding_items():
     text = "hold\n## Findings\n1. a.py:1 bug\n   - detail\n2. None of the rows load\n- None.\n"
     assert finding_items(text) == ["1. a.py:1 bug", "2. None of the rows load"]
     assert finding_items("clean\n- a.py:1 bug\n") is None
+    text = "hold\n## Findings\n### 1. race\n- detail\n### 2. gap\n## Commands\n- pytest\n"
+    assert finding_items(text) == ["### 1. race", "### 2. gap"]
 
 
 def test_missing_file(tmp_path):

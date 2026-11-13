@@ -3,7 +3,8 @@ from pathlib import Path
 
 from orchestrate.config import Review
 
-FINDINGS_HEADING = re.compile(r"^#+\s*(?:\d+[.)]\s*)?findings\b", re.I)
+FINDINGS_HEADING = re.compile(r"^(?P<level>#+)\s*(?:\d+[.)]\s*)?findings\b", re.I)
+FIXES_HEADING = re.compile(r"^(?:#+[ \t]*|\*\*|__)?[ \t]*fixes\b", re.I | re.M)
 LIST_ITEM = re.compile(r"^(?:\d+[.)]|[-*])\s+")
 NO_FINDINGS = re.compile(
     r"^(?:\d+[.)]|[-*])\s+[\W_]*(?:none|no findings|nothing(?: to report)?)[\W_]*$", re.I
@@ -24,13 +25,20 @@ def patterns(review: Review) -> tuple[re.Pattern[str], re.Pattern[str]]:
 
 def finding_items(text: str) -> list[str] | None:
     items: list[str] = []
-    inside = seen = False
+    level = 0
+    seen = sub = False
     for line in text.splitlines():
         if line.startswith("#"):
-            inside = bool(FINDINGS_HEADING.match(line))
-            seen = seen or inside
+            depth = len(line) - len(line.lstrip("#"))
+            if FINDINGS_HEADING.match(line):
+                level, seen, sub = depth, True, False
+            elif level and depth > level:
+                items.append(line.strip())
+                sub = True
+            else:
+                level = 0
             continue
-        if inside and LIST_ITEM.match(line) and not NO_FINDINGS.match(line.strip()):
+        if level and not sub and LIST_ITEM.match(line) and not NO_FINDINGS.match(line.strip()):
             items.append(line.strip())
     return items if seen else None
 
