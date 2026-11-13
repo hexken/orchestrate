@@ -22,6 +22,7 @@ class Project:
     destination: str = "main"
     branch_prefix: str = "agent/"
     planning_repo: Path | None = None
+    scratch: str = "scratch"
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ class Review:
     hold: tuple[str, ...] = ("not clean", "changes needed", "hold")
     docs_only: tuple[str, ...] = ("docs/**", "*.md")
     verdict_lines: int = 60
+    context: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -264,7 +266,15 @@ def load(path: Path) -> Config:
         ),
         land=land,
         timeouts=build(Timeouts, table(data, "timeouts"), "timeouts"),
-        review=build(Review, table(data, "review"), "review"),
+        review=build(
+            Review,
+            table(data, "review"),
+            "review",
+            context=tuple(
+                str(expand(c, base))
+                for c in strings(table(data, "review").get("context", []), "review.context")
+            ),
+        ),
         roles=known,
         pipeline=pipelines(table(data, "pipeline"), known),
         sources=sources(table(data, "sources")),
