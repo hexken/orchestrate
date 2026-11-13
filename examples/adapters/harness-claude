@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+run() { if [[ -n ${ORCH_DRY_RUN:-} ]]; then printf '%q ' "$@"; echo; else "$@"; fi; }
+verb=${1:?usage: harness-claude describe|start|print|skills-sync}
+shift
+case $verb in
+  describe)
+    echo '{"kind": "claude", "interactive": true, "print": true, "skills": "~/.claude/skills"}' ;;
+  start)
+    name=$1 pane=$2 cwd=$3 brief=$4
+    dirs=()
+    IFS=: read -r -a extra <<<"${ORCH_ADD_DIRS:-}"
+    for d in ${extra[@]+"${extra[@]}"}; do [[ -n $d ]] && dirs+=(--add-dir "$d"); done
+    cd "$cwd"
+    run herdr agent start "$name" --kind claude --pane "$pane" --timeout 60000 -- \
+      --model "$ORCH_MODEL" --effort "$ORCH_EFFORT" --permission-mode auto ${dirs[@]+"${dirs[@]}"}
+    run herdr-name "$name" "$pane" || true
+    [[ -n ${ORCH_DRY_RUN:-} ]] || sleep 2
+    run herdr agent prompt "$name" \
+      "Your brief is the file $brief. Read it in full now and carry it out to the end without waiting for further input."
+    if [[ -n ${ORCH_DRY_RUN:-} ]]; then echo dry-run; exit 0; fi
+    herdr agent get "$name" | python3 -c '
+import json, sys
+reply = json.load(sys.stdin).get("result", {})
+print(((reply.get("agent") or {}).get("agent_session") or {}).get("value") or "")' ;;
+  print)
+    prompt=$1 out=$2
+    if [[ -n ${ORCH_DRY_RUN:-} ]]; then
+      run claude -p "<$prompt>" --model "$ORCH_MODEL" --effort "$ORCH_EFFORT" --permission-mode auto
+      exit 0
+    fi
+    tmp=$(mktemp)
+    if claude -p "$(cat "$prompt")" --model "$ORCH_MODEL" --effort "$ORCH_EFFORT" \
+        --permission-mode auto >"$tmp" && [[ -s $tmp ]]; then
+      mv "$tmp" "$out"
+    else
+      rm -f "$tmp"; exit 1
+    fi ;;
+  skills-sync)
+    exit 0 ;;
+  *) echo "unknown verb $verb" >&2; exit 2 ;;
+esac

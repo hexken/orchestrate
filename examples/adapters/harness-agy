@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+run() { if [[ -n ${ORCH_DRY_RUN:-} ]]; then printf '%q ' "$@"; echo; else "$@"; fi; }
+skills_home=${AGY_SKILLS_HOME:-$HOME/.gemini/config/skills}
+verb=${1:?usage: harness-agy describe|start|print|skills-sync}
+shift
+case $verb in
+  describe)
+    echo '{"kind": "agy", "interactive": true, "print": true, "skills": "real copies in ~/.gemini/config/skills"}' ;;
+  start)
+    name=$1 pane=$2 cwd=$3 brief=$4
+    cd "$cwd"
+    run herdr agent start "$name" --kind agy --pane "$pane" --timeout 90000 -- \
+      --model "$ORCH_MODEL" --effort "$ORCH_EFFORT"
+    [[ -n ${ORCH_DRY_RUN:-} ]] || sleep 5
+    run herdr-name "$name" "$pane" || true
+    run herdr agent prompt "$name" \
+      "Your brief is the file $brief. Read it in full now and carry it out to the end without waiting for further input."
+    if [[ -n ${ORCH_DRY_RUN:-} ]]; then echo dry-run; exit 0; fi
+    herdr agent get "$name" | python3 -c '
+import json, sys
+reply = json.load(sys.stdin).get("result", {})
+print(((reply.get("agent") or {}).get("agent_session") or {}).get("value") or "")' ;;
+  print)
+    prompt=$1 out=$2
+    if [[ -n ${ORCH_DRY_RUN:-} ]]; then
+      run agy -p "<$prompt>" --model "$ORCH_MODEL" --mode plan --disable-slash-commands
+      exit 0
+    fi
+    tmp=$(mktemp)
+    if agy -p "$(cat "$prompt")" --model "$ORCH_MODEL" --mode plan --disable-slash-commands \
+        >"$tmp" && [[ -s $tmp ]]; then
+      mv "$tmp" "$out"
+    else
+      rm -f "$tmp"; exit 1
+    fi ;;
+  skills-sync)
+    IFS=: read -r -a skills <<<"${ORCH_SKILLS:-}"
+    for skill in ${skills[@]+"${skills[@]}"}; do
+      [[ -n $skill ]] || continue
+      target="$skills_home/$(basename "$skill")"
+      run mkdir -p "$skills_home"
+      run rm -rf "$target"
+      run cp -RL "$skill" "$target"
+    done ;;
+  *) echo "unknown verb $verb" >&2; exit 2 ;;
+esac

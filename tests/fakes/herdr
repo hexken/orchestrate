@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+echo "herdr $*" >>"${FAKE_LOG:-/dev/null}"
+case "$1 $2" in
+  "agent get") echo '{"result": {"agent": {"agent_status": "'"${FAKE_AGENT_STATUS:-idle}"'", "agent_session": {"value": "sess-1"}}}}' ;;
+  "tab create") echo '{"result": {"tab": {"tab_id": "t1"}, "root_pane": {"pane_id": "p1"}}}' ;;
+  "pane split") echo '{"result": {"pane": {"pane_id": "p2"}}}' ;;
+  "pane layout") echo '{"result": {"layout": {"panes": []}}}' ;;
+  "agent read") echo "${FAKE_SCREEN:-}" ;;
+  *) echo '{"result": {}}' ;;
+esac

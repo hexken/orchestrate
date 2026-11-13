@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+echo "herdr-name $*" >>"${FAKE_LOG:-/dev/null}"
