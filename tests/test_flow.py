@@ -228,6 +228,53 @@ def test_a_bullet_starting_with_fixes_is_not_a_fixes_section(ctx, unit):
     assert unit["status"] == "fixing"
 
 
+def fixes_in(ctx, unit, review, fixes):
+    build_done(ctx, unit)
+    ctx.fx.clock += 5
+    paths = review_paths(ctx, unit)
+    write(ctx, paths["reviewer"], review)
+    write(ctx, paths["second_reviewer"], "clean\n## Findings\n- None.\n")
+    assert tick(ctx, unit) is None and unit["status"] == "fixing"
+    ctx.fx.clock += 5
+    write(ctx, flow.summary(ctx, unit), "# A-1\n## Fixes\n" + fixes)
+    ctx.fx.heads["a-1"] = "h2"
+    flow.step(ctx, unit)
+    return tick(ctx, unit)
+
+
+TWO = "changes needed\n## Findings\n1. high: race\n2. low: wording\n"
+
+
+def test_a_declined_high_finding_is_an_event(ctx, unit):
+    event = fixes_in(
+        ctx,
+        unit,
+        TWO,
+        "- reviewer #1 (high): race: declined: by design\n"
+        "- reviewer #2 (low): wording: fixed in h2; fails without the fix: test_w\n",
+    )
+    assert "unsettled fixes" in event and "reviewer #1" in event
+    assert unit["status"] == "waiting"
+
+
+def test_missing_fixes_lines_are_an_event(ctx, unit):
+    event = fixes_in(
+        ctx, unit, TWO, "- reviewer #1 (high): race: fixed in h2; fails without the fix: test_r\n"
+    )
+    assert "unsettled fixes: 1 Fixes lines for 2 findings" in event
+
+
+def test_a_deferred_low_finding_still_lands(ctx, unit):
+    event = fixes_in(
+        ctx,
+        unit,
+        TWO,
+        "- reviewer #1 (high): race: fixed in h2; fails without the fix: test_r\n"
+        "- reviewer #2 (low): wording: deferred: INBOX\n",
+    )
+    assert event is None and unit["status"] == "landing"
+
+
 def test_resume_light_refused_without_light_review(ctx, unit):
     unit["status"] = "waiting"
     with pytest.raises(RuntimeError, match="no light review"):

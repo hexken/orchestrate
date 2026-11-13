@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from orchestrate import breakpoints, briefs
+from orchestrate import breakpoints, briefs, report
 from orchestrate.adapters import adapter_path
 from orchestrate.config import Config
 from orchestrate.effects import Effects, matches
@@ -427,6 +427,22 @@ def reviews_step(ctx: Ctx, unit: Unit) -> str | None:
     return landed(ctx, unit)
 
 
+def unsettled(unit: Unit, summary_path: Path) -> str | None:
+    lines = report.fixes(summary_path, unit["unit"])
+    total = sum(report.findings(Path(f["path"])) for f in unit.get("review_files", []))
+    after = "check them, then `resume <UNIT> landing --accept-head` or `resume <UNIT> fixing`"
+    open_ = [
+        f"{f['reviewer']} #{f['n']} ({f['severity']}, {f['outcome']})"
+        for f in lines
+        if f["outcome"] in ("declined", "deferred") and f["severity"] in ("high", "medium")
+    ]
+    if open_:
+        return f"unsettled fixes: {', '.join(open_)}: {after}"
+    if len(lines) < total:
+        return f"unsettled fixes: {len(lines)} Fixes lines for {total} findings: {after}"
+    return None
+
+
 def step(ctx: Ctx, unit: Unit) -> str | None:
     status = unit["status"]
     record_minutes(ctx, unit)
@@ -454,8 +470,11 @@ def step(ctx: Ctx, unit: Unit) -> str | None:
         if written and idle_twice(ctx, unit, unit["name"]):
             if ctx.config.pipeline[unit["harness"]].light:
                 start_light(ctx, unit)
-            else:
-                start_landing(ctx, unit)
+                return None
+            problem = unsettled(unit, path)
+            if problem:
+                return ctx.ws.wait(unit, problem)
+            start_landing(ctx, unit)
             return None
         problem = stalled(ctx, unit, unit["name"], "builder", unit["harness"])
         return ctx.ws.wait(unit, problem) if problem else None

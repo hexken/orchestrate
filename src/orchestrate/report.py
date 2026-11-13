@@ -26,6 +26,7 @@ EVENT_KINDS = (
     ("review no output", "ended with no output"),
     ("job limit", "has run over"),
     ("moved", "moved past"),
+    ("unsettled fixes", "unsettled fixes"),
     ("error", "error:"),
 )
 FINDING = re.compile(r"^\s*(?:\d+[.)]|[-*])\s+.*?[\w./-]+\.\w+:\d+")
