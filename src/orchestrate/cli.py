@@ -13,11 +13,13 @@ from pathlib import Path
 from orchestrate import (
     align,
     breakpoints,
+    compact,
     conform,
     doctor,
     flow,
     report,
     scaffold,
+    sources,
     specgate,
     watch,
     worktrees,
@@ -309,6 +311,44 @@ def cmd_align(ctx: flow.Ctx, args: argparse.Namespace) -> int:
     return 1 if work.findings else 0
 
 
+def cmd_compact(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    if args.action == "scan":
+        total = 0
+        for name in args.paths:
+            path = Path(name)
+            source = sources.source_for(ctx.config, path)
+            strength = source.compact if source else "unclassified"
+            found = compact.scan(path.read_text())
+            total += len(found)
+            print(f"{path} ({strength}): {len(found)} candidate(s)")
+            for item in found:
+                print(f"  {item.line}: {item.why}: {item.text}")
+        return 1 if total else 0
+    if args.rev:
+        if len(args.paths) != 1:
+            raise RuntimeError("compact verify --rev REV takes one path")
+        path = Path(args.paths[0]).resolve()
+        done = subprocess.run(
+            ["git", "show", f"{args.rev}:./{path.name}"],
+            cwd=path.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if done.returncode:
+            raise RuntimeError(f"git show {args.rev}:{path.name} failed: {done.stderr.strip()}")
+        before, after = done.stdout, path.read_text()
+    else:
+        if len(args.paths) != 2:
+            raise RuntimeError("compact verify takes BEFORE AFTER, or --rev REV PATH")
+        before, after = (Path(p).read_text() for p in args.paths)
+    problems = compact.verify(before, after)
+    for problem in problems:
+        print(problem)
+    print("meaning kept" if not problems else f"{len(problems)} element(s) dropped")
+    return 1 if problems else 0
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -329,6 +369,7 @@ COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "install-acceptance": cmd_install_acceptance,
     "breakpoint": cmd_breakpoint,
     "align": cmd_align,
+    "compact": cmd_compact,
 }
 STANDALONE = ("doctor", "scaffold")
 
@@ -349,6 +390,10 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--once", action="store_true")
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
+    squeeze = sub.add_parser("compact", help="narration candidates; check a conservative pass")
+    squeeze.add_argument("action", choices=("scan", "verify"))
+    squeeze.add_argument("paths", nargs="+")
+    squeeze.add_argument("--rev", help="verify: compare PATH with its version at this revision")
     aligned = sub.add_parser("align", help="cross-source alignment checks; writes a worklist")
     aligned.add_argument("--out")
     point = sub.add_parser("breakpoint", help="add, list or pass a breakpoint")
