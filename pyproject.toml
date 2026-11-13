@@ -1,0 +1,34 @@
+[project]
+name = "orchestrate"
+version = "0.1.0"
+description = "Herdr-native orchestration of coding-agent build units"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+orch = "orchestrate.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/orchestrate"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+strict = true
+files = ["src"]
+python_version = "3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
