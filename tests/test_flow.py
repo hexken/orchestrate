@@ -87,18 +87,27 @@ class FakeFx(Effects):
         return []
 
 
-@pytest.fixture
-def ctx(tmp_path):
+def make_ctx(tmp_path, extra=""):
     cfg = tmp_path / "orchestrate.toml"
     cfg.write_text(
-        f'[project]\nname = "myapp"\nrepo = "{tmp_path}/repo"\n[land]\nadapter = "fake"\n'
+        f'[project]\nname = "myapp"\nrepo = "{tmp_path}/repo"\n[land]\nadapter = "fake"\n' + extra
     )
     config = load(cfg)
     ws = Workspace(config.workspace)
-    ws.briefs.mkdir(parents=True)
+    ws.briefs.mkdir(parents=True, exist_ok=True)
     (ws.briefs / "review.md").write_text(REVIEW_BRIEF)
     (ws.briefs / "light.md").write_text(LIGHT_BRIEF)
     return flow.Ctx(config, ws, FakeFx(config, ws))
+
+
+@pytest.fixture
+def ctx(tmp_path):
+    return make_ctx(tmp_path)
+
+
+LIGHT_ON = (
+    '[pipeline.claude]\nreviews = ["reviewer", "second_reviewer"]\nlight = "light_reviewer"\n'
+)
 
 
 @pytest.fixture
@@ -173,7 +182,41 @@ def test_happy_path_merges_and_archives(ctx, unit):
     assert archived["pr"] == "3"
 
 
-def test_hold_sends_fixes_then_light_review_then_merge(ctx, unit):
+def test_hold_sends_fixes_then_lands_without_light_review(ctx, unit):
+    build_done(ctx, unit)
+    ctx.fx.clock += 5
+    paths = review_paths(ctx, unit)
+    write(ctx, paths["reviewer"], "Verdict: changes needed\n")
+    write(ctx, paths["second_reviewer"], "clean\n")
+    assert tick(ctx, unit) is None
+    assert unit["status"] == "fixing"
+    ctx.fx.clock += 5
+    write(ctx, flow.summary(ctx, unit), "# A-1\nbuilt\n**Fixes**\n- fixed in h2\n")
+    ctx.fx.heads["a-1"] = "h2"
+    assert tick(ctx, unit) is None
+    assert tick(ctx, unit) is None
+    assert unit["status"] == "landing"
+    assert unit["checked_head"] == "h2" and unit.get("reland") is True
+    assert [s for s in ctx.fx.started if s[0] == "light_reviewer"] == []
+    assert [j for j in ctx.fx.jobs_started if j[0] == "light_reviewer"] == []
+    assert sum(1 for j in ctx.fx.jobs_started if j[0] == "land") == 1
+    finish(unit, "land", "LANDED PR #3 SUCCESSFUL h1")
+    assert tick(ctx, unit) is None
+    assert unit["land_head"] == "h2" and "reland" not in unit
+    finish(unit, "land", "LANDED PR #3 SUCCESSFUL h2")
+    assert tick(ctx, unit) == "merged"
+    assert any("fixes in at h2: landing" in what for _, what in unit["timeline"])
+
+
+def test_resume_light_refused_without_light_review(ctx, unit):
+    unit["status"] = "waiting"
+    with pytest.raises(RuntimeError, match="no light review"):
+        flow.resume(ctx, unit, "light")
+
+
+def test_hold_sends_fixes_then_light_review_then_merge(tmp_path, unit):
+    ctx = make_ctx(tmp_path, LIGHT_ON)
+    unit["started"] = ctx.fx.clock - 10
     build_done(ctx, unit)
     ctx.fx.clock += 5
     paths = review_paths(ctx, unit)

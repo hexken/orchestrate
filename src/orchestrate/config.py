@@ -73,7 +73,7 @@ class Role:
 @dataclass(frozen=True)
 class Pipeline:
     reviews: tuple[str, ...]
-    light: str
+    light: str = ""
 
 
 @dataclass(frozen=True)
@@ -134,8 +134,8 @@ DEFAULT_ROLES = {
 }
 
 DEFAULT_PIPELINE = {
-    "claude": Pipeline(("reviewer", "second_reviewer"), "light_reviewer"),
-    "agy": Pipeline(("reviewer",), "light_reviewer_claude"),
+    "claude": Pipeline(("reviewer", "second_reviewer"), ""),
+    "agy": Pipeline(("reviewer",), ""),
 }
 
 
@@ -218,7 +218,7 @@ def pipelines(data: dict[str, Any], known: dict[str, Role]) -> dict[str, Pipelin
             if role not in known:
                 raise ConfigError(f"{key}.reviews names undefined role {role!r}")
         light = raw.get("light", "")
-        if light not in known:
+        if light and light not in known:
             raise ConfigError(f"{key}.light names undefined role {light!r}")
         result[harness] = Pipeline(reviews, light)
     return result

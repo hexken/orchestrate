@@ -193,7 +193,8 @@ def cmd_roles(ctx: flow.Ctx, args: argparse.Namespace) -> int:
         print(f"{name:22} {role.harness:8} {role.model:28} {role.effort:8} {role.mode}")
     for harness, pipe in ctx.config.pipeline.items():
         print(
-            f"built by {harness}: reviews {', '.join(pipe.reviews) or 'none'}; light {pipe.light}"
+            f"built by {harness}: reviews {', '.join(pipe.reviews) or 'none'}; "
+            f"light {pipe.light or 'off'}"
         )
     return 0
 

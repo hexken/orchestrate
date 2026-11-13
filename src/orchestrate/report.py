@@ -10,9 +10,9 @@ from orchestrate.registry import Workspace
 STAGES = (
     ("building", "started on", "summary written"),
     ("reviewing", "reviews started", ("fixes sent", "reviews clean")),
-    ("fixing", "fixes sent", "light review started"),
+    ("fixing", "fixes sent", ("light review started", "fixes in")),
     ("light", "light review started", ("reviews clean", "waiting: the light review holds")),
-    ("landing", "reviews clean", "merged PR"),
+    ("landing", ("reviews clean", "fixes in"), "merged PR"),
 )
 EVENT_KINDS = (
     ("wedged", "wedged"),
@@ -44,10 +44,11 @@ def stamp(text: str) -> datetime:
 def stage_minutes(timeline: list[list[str]]) -> dict[str, float]:
     result: dict[str, float] = defaultdict(float)
     for name, begin, end in STAGES:
+        begins = (begin,) if isinstance(begin, str) else begin
         ends = (end,) if isinstance(end, str) else end
         opened: datetime | None = None
         for when, what in timeline:
-            if what.startswith(begin) and opened is None:
+            if what.startswith(begins) and opened is None:
                 opened = stamp(when)
             elif opened is not None and what.startswith(ends):
                 result[name] += round((stamp(when) - opened).total_seconds() / 60, 1)

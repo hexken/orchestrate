@@ -30,6 +30,7 @@ def test_minimal_file_gets_defaults(tmp_path):
     assert config.roles["builder"].harness == "claude"
     assert config.roles["second_reviewer"].mode == "print"
     assert config.pipeline["claude"].reviews == ("reviewer", "second_reviewer")
+    assert config.pipeline["claude"].light == "" and config.pipeline["agy"].light == ""
     assert config.breakpoints.steps == ("freeze", "align", "compact", "digest")
     assert config.spec_gate.enabled is False
     assert config.sources.impl_docs == "deferred"
@@ -52,6 +53,13 @@ def test_role_without_model(tmp_path):
     text = MINIMAL + '[roles.scout]\nharness = "claude"\n'
     with pytest.raises(ConfigError, match=r"roles\.scout\.model"):
         load(write(tmp_path, text))
+
+
+def test_light_review_can_be_turned_back_on(tmp_path):
+    text = MINIMAL + '[pipeline.claude]\nreviews = ["reviewer"]\nlight = "light_reviewer"\n'
+    config = load(write(tmp_path, text))
+    assert config.pipeline["claude"].light == "light_reviewer"
+    assert config.pipeline["agy"].light == ""
 
 
 def test_pipeline_naming_undefined_role(tmp_path):

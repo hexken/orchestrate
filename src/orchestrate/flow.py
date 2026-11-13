@@ -204,15 +204,27 @@ def start_fixes(ctx: Ctx, unit: Unit) -> None:
     ctx.ws.mark(unit, "fixes sent to the builder")
 
 
+def land_checked(ctx: Ctx, unit: Unit) -> None:
+    if ctx.fx.job(unit, "land") is None and "land" in unit.get("jobs", {}):
+        unit["reland"] = True
+    else:
+        land(ctx, unit)
+
+
+def start_landing(ctx: Ctx, unit: Unit) -> None:
+    unit["status"], unit["required"] = "landing", []
+    reset_timers(unit)
+    unit["checked_head"] = ctx.fx.head(unit)
+    ctx.ws.mark(unit, f"fixes in at {unit['checked_head']}: landing")
+    land_checked(ctx, unit)
+
+
 def start_light(ctx: Ctx, unit: Unit) -> None:
     unit["status"], unit["required"], unit["reviews_started"] = "light", [], ctx.fx.now()
     reset_timers(unit)
     unit["checked_head"] = ctx.fx.head(unit)
     ctx.ws.mark(unit, f"light review started at {unit['checked_head']}")
-    if ctx.fx.job(unit, "land") is None and "land" in unit.get("jobs", {}):
-        unit["reland"] = True
-    else:
-        land(ctx, unit)
+    land_checked(ctx, unit)
     reviews = ", ".join(f["path"] for f in unit["review_files"])
     role = ctx.config.pipeline[unit["harness"]].light
     start_review(ctx, unit, role, "light", unit["reviewed_head"], {"REVIEWS": reviews})
@@ -416,7 +428,10 @@ def step(ctx: Ctx, unit: Unit) -> str | None:
         text = path.read_text() if path.exists() else ""
         written = fresh(path, unit.get("fixes_sent", 0)) and FIXES.search(text)
         if written and idle_twice(ctx, unit, unit["name"]):
-            start_light(ctx, unit)
+            if ctx.config.pipeline[unit["harness"]].light:
+                start_light(ctx, unit)
+            else:
+                start_landing(ctx, unit)
             return None
         problem = stalled(ctx, unit, unit["name"], "builder", unit["harness"])
         return ctx.ws.wait(unit, problem) if problem else None
@@ -531,6 +546,8 @@ def restart_missing_reviews(ctx: Ctx, unit: Unit) -> None:
 def resume(ctx: Ctx, unit: Unit, status: str) -> None:
     if status not in ("building", "reviewing", "fixing", "light", "landing"):
         raise RuntimeError("resume to building, reviewing, fixing, light or landing")
+    if status == "light" and not ctx.config.pipeline[unit["harness"]].light:
+        raise RuntimeError(f"the {unit['harness']} pipeline has no light review")
     unit["status"], unit["event"] = status, None
     reset_timers(unit)
     if status == "fixing":

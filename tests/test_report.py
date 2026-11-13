@@ -90,6 +90,25 @@ def test_report(tmp_path):
     assert "| A-1 | claude | merged | 40 | 20 | 15 | 10 | 12 | 1 | stalled 1 |" in markdown(data)
 
 
+def test_stages_without_light_review():
+    from orchestrate.report import stage_minutes
+
+    timeline = [
+        ["2026-01-01 10:00:00", "started on agent/a-1 at b0"],
+        ["2026-01-01 10:30:00", "summary written at h1"],
+        ["2026-01-01 10:30:00", "reviews started at h1 (2 required)"],
+        ["2026-01-01 10:50:00", "fixes sent to the builder"],
+        ["2026-01-01 11:05:00", "fixes in at h2: landing"],
+        ["2026-01-01 11:25:00", "merged PR #3"],
+    ]
+    assert stage_minutes(timeline) == {
+        "building": 30.0,
+        "reviewing": 20.0,
+        "fixing": 15.0,
+        "landing": 20.0,
+    }
+
+
 def test_report_since(tmp_path):
     data = build(fixture(tmp_path), since="2026-01-02")
     assert [u["unit"] for u in data["units"]] == ["B-1"]
