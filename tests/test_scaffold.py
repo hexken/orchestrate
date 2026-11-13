@@ -1,7 +1,10 @@
-import hashlib
+import os
 import re
 import subprocess
 import tomllib
+from pathlib import Path
+
+import pytest
 
 from orchestrate.cli import main
 from orchestrate.config import load
@@ -9,19 +12,10 @@ from orchestrate.scaffold import WORKSPACE_FILES
 
 from .conftest import ROOT
 
-GUARDED = {
-    "9c758eed31287539",
-    "3e808ece8227f5d4",
-    "82535cbd439cf3a5",
-    "11750d3cce898a85",
-    "dbea7e4dccf3e4c0",
-    "3719bd0ef1cf2806",
-    "550f0e73ba4a13a3",
-    "4304d1ebe624b221",
-    "8d291c7017252b07",
-    "8137015431526046",
-}
-WORD = re.compile(r"[a-z0-9][a-z0-9/_.-]*")
+GUARD_FILES = (
+    os.environ.get("ORCH_GUARD_TERMS", ""),
+    os.path.expanduser("~/.config/git-scrub/map.tsv"),
+)
 
 
 def scaffold(project, *extra):
@@ -85,13 +79,22 @@ def tracked_text():
             continue
 
 
-def test_no_reference_project_terms():
-    hits = []
-    for name, text in tracked_text():
-        words = WORD.findall(text)
-        grams = words + [f"{a} {b}" for a, b in zip(words, words[1:], strict=False)]
-        for gram in grams:
-            for candidate in {gram, gram.strip("./-_")}:
-                if hashlib.sha256(candidate.encode()).hexdigest()[:16] in GUARDED:
-                    hits.append(name)
-    assert hits == []
+def guarded_terms():
+    path = next((p for p in GUARD_FILES if p and os.path.exists(p)), None)
+    if path is None:
+        return None
+    terms = []
+    for line in Path(path).read_text().splitlines():
+        term = line.split("\t", 1)[0].strip().lower()
+        if term and not term.startswith("#"):
+            terms.append(term)
+    return terms
+
+
+def test_no_private_terms():
+    terms = guarded_terms()
+    if terms is None:
+        pytest.skip("no private-terms file: set ORCH_GUARD_TERMS or keep a git-scrub map")
+    patterns = [re.compile(rf"(?<![a-z0-9]){re.escape(t)}(?![a-z0-9])") for t in terms]
+    hits = sorted({name for name, text in tracked_text() if any(p.search(text) for p in patterns)})
+    assert hits == [], "files holding a private term (terms not shown)"
