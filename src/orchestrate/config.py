@@ -102,7 +102,7 @@ class Home:
 
 @dataclass(frozen=True)
 class Breakpoints:
-    steps: tuple[str, ...] = ("freeze", "align", "compact", "digest")
+    steps: tuple[str, ...] = ("freeze", "align", "compact", "cleanup", "digest")
     conditional_go: str = ""
 
 

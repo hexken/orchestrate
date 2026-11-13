@@ -31,7 +31,7 @@ def test_minimal_file_gets_defaults(tmp_path):
     assert config.roles["second_reviewer"].mode == "print"
     assert config.pipeline["claude"].reviews == ("reviewer", "second_reviewer")
     assert config.pipeline["claude"].light == "" and config.pipeline["agy"].light == ""
-    assert config.breakpoints.steps == ("freeze", "align", "compact", "digest")
+    assert config.breakpoints.steps == ("freeze", "align", "compact", "cleanup", "digest")
     assert config.spec_gate.enabled is False
     assert config.sources.impl_docs == "deferred"
 

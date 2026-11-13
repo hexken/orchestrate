@@ -36,7 +36,7 @@ docs_only = ["docs/**", "*.md"]
 context = []
 
 [breakpoints]
-steps = ["freeze", "align", "compact", "digest"]
+steps = ["freeze", "align", "compact", "cleanup", "digest"]
 conditional_go = ""
 
 [sources]

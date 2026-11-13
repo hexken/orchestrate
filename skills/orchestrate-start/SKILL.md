@@ -17,3 +17,10 @@ description: Use when the orchestration workspace is set up and the user wants t
 8. **Record**: update "Current state" in `ORCHESTRATION.md` (what is running, what is next); `orch note - "owner input: <their go>"` for the owner's instruction.
 
 Tell the user in two or three lines what started and how to see it (`orch status`, each unit's Herdr tab with its live view).
+
+## Unattended runs
+
+When the owner will be away:
+- Keep the host awake for the expected duration (for example `caffeinate -dimsu -t <seconds>` on macOS, `systemd-inhibit` on Linux), and tell the owner that a closed lid or battery power can still sleep it.
+- Tell the owner which interruptions stall a unit until they return: a permission dialog only they may answer, a proxy or network block, an expired login.
+- Record any conditional instruction ("go on to the next milestone if these hold") in "Current state" in `ORCHESTRATION.md` with its conditions, check them at each wake-up, and withdraw it there when the owner changes their mind.

@@ -14,3 +14,13 @@ description: Use when the user asks how the orchestrated build is going, what is
 5. "Current state" in `.orchestrate/ORCHESTRATION.md` for what is next.
 
 Answer in a few lines: what merged since the last report, what is running and at which stage, what waits and on whom, what needs the owner.
+
+## Progress report with an ETA
+
+When the owner asks how long is left:
+1. **What is left**: the units to the finish line by milestone and size (the work plan's `Size` column), naming the units out of scope and the deferred ones.
+2. **Durations from the record**: `orch report` gives median minutes per stage and in total by size. Say how many units each median rests on, and trim for what has changed since (a review dropped, faster checks).
+3. **Critical path**: the longest chain through the units' needs; no amount of parallel work makes the build shorter than that.
+4. **Wall time**: serial unit time divided across the worktrees that really run at once (two lanes on one laptop), but never below the critical path; add each breakpoint's overhead (alignment, compaction, the owner's answer).
+5. **Uncertainties**: the largest ones first (L units, open questions, a new harness, owner response time), with what each could add.
+Give a range, not a single time.

@@ -13,6 +13,7 @@ The orchestrating session decides what to build and handles judgment; `orch` doe
 ## Current state
 
 - No unit is running. The work plan is `{{work_plan}}`.
+- Owner's conditional instructions (each with its conditions; withdraw it here when the owner changes their mind): none.
 
 ## Where things are
 
@@ -52,7 +53,7 @@ These need the owner: merging anywhere but `{{destination}}`; editing an owner-o
 
 ## Breakpoints
 
-A milestone's end is a breakpoint; the owner adds others (`orch breakpoint add`). At each, run `[breakpoints].steps` with the `orchestrate-breakpoint` skill: freeze (running units finish), align, compact, then one message to the owner. Wait for `orch breakpoint pass`, unless `[breakpoints].conditional_go` holds.
+A milestone's end is a breakpoint; the owner adds others (`orch breakpoint add`). At each, run `[breakpoints].steps` with the `orchestrate-breakpoint` skill: freeze (running units finish), align, compact, cleanup, then one message to the owner. Wait for `orch breakpoint pass`, unless `[breakpoints].conditional_go` holds.
 
 ## Each wake-up
 

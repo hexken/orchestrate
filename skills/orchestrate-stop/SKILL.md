@@ -19,3 +19,4 @@ Rules:
 - After `orch stop`, a changed `orchestrate.toml` or package takes effect at the next `orch supervise`.
 - Record why: `orch note - "orchestrator: stopped <what>, because <reason>"` (or `owner input: …` when the user asked).
 - Update "Current state" in `ORCHESTRATION.md`.
+- When the run ends for good, clean up as in `orchestrate-breakpoint`, "Cleaning up": only what the orchestration created, and tell the owner what was removed.
