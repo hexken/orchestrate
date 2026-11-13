@@ -7,7 +7,7 @@ import pytest
 
 from orchestrate import flow, jobs
 from orchestrate.config import load
-from orchestrate.effects import Effects, matches
+from orchestrate.effects import EffectError, Effects, matches
 from orchestrate.registry import Workspace
 
 REVIEW_BRIEF = "Review <UNIT> from <BASE> to <HEAD>. <DELIVER>\n"
@@ -30,6 +30,7 @@ class FakeFx(Effects):
         self.ages = {}
         self.base_at = ""
         self.only_merges = False
+        self.fetch_failures = 0
         self.fail_prompt = set()
 
     def now(self):
@@ -42,7 +43,9 @@ class FakeFx(Effects):
         return self.files
 
     def fetch(self, unit):
-        pass
+        if self.fetch_failures:
+            self.fetch_failures -= 1
+            raise EffectError("git fetch -q origin failed: no route to host")
 
     def is_ancestor(self, unit, older, newer):
         return self.ancestor
@@ -408,6 +411,28 @@ def test_reviews_diff_against_the_merge_base(ctx, unit):
     build_done(ctx, unit)
     assert unit["base"] == "mb7" and unit["started_base"] == "b0"
     assert "Review A-1 from mb7 to h1" in ctx.fx.started[0][2]
+
+
+def test_a_long_merge_base_naming_the_base_keeps_it(ctx, unit):
+    ctx.fx.base_at = "b0c1d2e3f4a5"
+    build_done(ctx, unit)
+    assert unit["base"] == "b0" and "started_base" not in unit
+
+
+def test_a_fetch_failure_at_review_start_is_retried_once(ctx, unit):
+    ctx.fx.fetch_failures = 1
+    build_done(ctx, unit)
+    assert unit["status"] == "reviewing"
+
+
+def test_a_second_fetch_failure_at_review_start_is_an_event(ctx, unit):
+    ctx.fx.fetch_failures = 2
+    write(ctx, flow.summary(ctx, unit), "# A-1\nbuilt\n")
+    ctx.fx.states["a-1"] = "idle"
+    flow.step(ctx, unit)
+    event = tick(ctx, unit)
+    assert event.startswith("fetch failed twice before the reviews") and "no route" in event
+    assert unit["status"] == "waiting" and ctx.fx.jobs_started == []
 
 
 def test_sibling_merge_prompts_builders_still_at_work(ctx, unit):

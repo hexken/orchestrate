@@ -9,7 +9,7 @@ from pathlib import Path
 from orchestrate import breakpoints, briefs, report
 from orchestrate.adapters import adapter_path
 from orchestrate.config import Config
-from orchestrate.effects import Effects, matches
+from orchestrate.effects import EffectError, Effects, matches
 from orchestrate.registry import Unit, Workspace
 from orchestrate.scaffold import TEMPLATES
 from orchestrate.verdict import FIXES_HEADING, verdict
@@ -181,14 +181,37 @@ def land(ctx: Ctx, unit: Unit) -> None:
     ctx.ws.mark(unit, f"land started at {unit['land_head']}")
 
 
-def start_reviews(ctx: Ctx, unit: Unit) -> None:
+def fetch_twice(ctx: Ctx, unit: Unit) -> str | None:
+    try:
+        ctx.fx.fetch(unit)
+        return None
+    except EffectError:
+        pass
+    try:
+        ctx.fx.fetch(unit)
+        return None
+    except EffectError as err:
+        return str(err)
+
+
+def same_commit(one: str, other: str) -> bool:
+    return bool(one and other) and (one.startswith(other) or other.startswith(one))
+
+
+def start_reviews(ctx: Ctx, unit: Unit) -> str | None:
+    problem = fetch_twice(ctx, unit)
+    if problem:
+        return ctx.ws.wait(
+            unit,
+            f"fetch failed twice before the reviews: {problem}; check the remote, then "
+            "`resume <UNIT> building`",
+        )
     unit["status"], unit["required"] = "reviewing", []
     reset_timers(unit)
     unit["reviews_started"] = ctx.fx.now()
     unit["reviewed_head"] = unit["checked_head"] = ctx.fx.head(unit)
-    ctx.fx.fetch(unit)
     since = ctx.fx.merge_base(unit)
-    if since and since != unit["base"]:
+    if since and not same_commit(since, unit["base"]):
         unit.setdefault("started_base", unit["base"])
         unit["base"] = since
     needs = code_changed(ctx, unit)
@@ -198,6 +221,7 @@ def start_reviews(ctx: Ctx, unit: Unit) -> None:
     for role in roles:
         start_review(ctx, unit, role, "review", unit["base"], {})
     unit["review_files"] = [dict(item) for item in unit["required"]]
+    return None
 
 
 def start_fixes(ctx: Ctx, unit: Unit) -> None:
@@ -459,8 +483,7 @@ def step(ctx: Ctx, unit: Unit) -> str | None:
     if status == "building":
         if fresh(summary(ctx, unit), unit["started"]) and idle_twice(ctx, unit, unit["name"]):
             ctx.ws.mark(unit, f"summary written at {ctx.fx.head(unit)}")
-            start_reviews(ctx, unit)
-            return None
+            return start_reviews(ctx, unit)
         problem = stalled(ctx, unit, unit["name"], "builder", unit["harness"])
         return ctx.ws.wait(unit, problem) if problem else None
     if status in ("reviewing", "light"):
