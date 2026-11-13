@@ -9,7 +9,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from orchestrate import conform, flow
+from orchestrate import conform, flow, watch
 from orchestrate.adapters import Harness, Land, adapter_path
 from orchestrate.config import ConfigError, load
 from orchestrate.effects import Effects
@@ -196,6 +196,10 @@ def cmd_conform(ctx: flow.Ctx, args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
+def cmd_watch(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    return watch.loop(ctx.ws, ctx.config.review, args.unit)
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -228,6 +232,9 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--once", action="store_true")
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
+    sub.add_parser("watch", help="live view of one unit (opened in its Herdr tab)").add_argument(
+        "unit"
+    )
     sub.add_parser("roles", help="print the role table and review pipelines")
     for verb in ("timeline", "reland", "close"):
         sub.add_parser(verb).add_argument("unit")
