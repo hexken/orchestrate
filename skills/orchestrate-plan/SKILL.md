@@ -24,6 +24,7 @@ A unit is one vertical slice: one behaviour through every layer it needs, with a
 
 - **Milestones**: each ends in behaviour the owner can see work. Each milestone's end is a breakpoint, where alignment and compaction run and the owner reviews.
 - **Waves**: within a milestone, units whose needs are met together. Two units in one wave may run at once only if they touch different files and interfaces; write the pairing rules down.
+- **Hotspots**: list the files every unit of a stream will edit: registries, route or screen tables, check runners, sample-data indexes, generated files. Each one is a merge conflict, or a semantic break found only at land, waiting to happen when units pair. Before units pair, propose a layout with one file per feature (a folder the registry discovers, one check script per screen, one sample-data file per route) as an early refactor unit, and write the remaining hotspots into the pairing rules.
 - **Streams**: optional labels (backend, console, process) when different skills or worktrees suit different units.
 
 ## 4. Fix the interfaces

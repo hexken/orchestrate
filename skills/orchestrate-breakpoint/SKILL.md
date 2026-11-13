@@ -24,6 +24,8 @@ The supervisor prints `EVENT: - breakpoint <name> reached` once every unit it wa
 3. **compact**: `orchestrate-compact`.
 4. **digest**: one message to the owner, short, with:
    - what was added: units merged (with pull requests), acceptance tests added;
+   - held acceptance tests: with the spec gate on, count the drafts waiting in `.orchestrate/rulings/` on scenario titles the spec does not have yet. While they wait the scan passes without them, so say how many there are and which units they belong to, and give the owner one patch with every title they need, merged across units, not one patch per unit;
+   - hotspots: files touched by three or more of the milestone's units (`git log --name-only` over its merges, counted per unit). Each one is a candidate for a one-file-per-feature split before the next milestone pairs units (`orchestrate-plan`, Hotspots);
    - what needs the owner: the proxy's digest (`orchestrate-proxy`, step 7), spec patches with their paths, alignment items routed to the owner;
    - `orch report --since <last breakpoint>` in two or three lines: median stage times, fix rounds, events, review yield; and any proposed tuning (`orchestrate-optimize`);
    - the next order: the next milestone's first wave;
