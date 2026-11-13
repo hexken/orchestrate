@@ -15,6 +15,16 @@ EXPECTED = {
     "orchestrate-onboard",
     "orchestrate-plan",
     "orchestrate-setup",
+    "orchestrate-start",
+    "orchestrate-stop",
+    "orchestrate-resume",
+    "orchestrate-status",
+    "orchestrate-optimize",
+    "orchestrate-proxy",
+    "orchestrate-acceptance",
+    "orchestrate-breakpoint",
+    "orchestrate-align",
+    "orchestrate-compact",
 }
 
 
@@ -43,3 +53,10 @@ def test_named_verbs_exist(path):
 def test_local_files_exist(path):
     for ref in LOCAL.findall(path.read_text()):
         assert (path.parent / ref).exists(), ref
+
+
+def test_named_skills_exist():
+    names = {p.parent.name for p in SKILLS}
+    for path in SKILLS:
+        named = set(re.findall(r"`(orchestrate(?:-[a-z]+)?)`", path.read_text()))
+        assert named - names == set(), path.parent.name
