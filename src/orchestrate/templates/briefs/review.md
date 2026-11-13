@@ -16,5 +16,5 @@ The review:
 - the verdict on the first line, in one of these words: "clean", "meets its outcome", or "changes needed";
 - the range read;
 - the tests run and not run;
-- the findings, most serious first, each with file:line, a failure scenario and a fix.
+- a `## Findings` section: the findings as a numbered list, most serious first, each with its severity (high, medium, low or nit), file:line, a failure scenario and a fix; `- None.` when there are none. A listed finding turns a clean verdict into a hold.
 The builder fixes them in its own session, from this file. Then stop.

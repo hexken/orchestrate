@@ -14,5 +14,5 @@ Check above all:
 Your whole answer is Markdown:
 - a one-line verdict, "clean" or "hold";
 - the commands you ran and whether each passed;
-- then at most 10 findings, most serious first, each with severity (high, medium or low), file:line at the unit's head, the failure scenario and the fix.
+- then a `## Findings` section: at most 10 findings as a numbered list, most serious first, each with severity (high, medium or low), file:line at the unit's head, the failure scenario and the fix; `- None.` when there are none. A listed finding turns a clean verdict into a hold, so say "hold" when you list one.
 Report real defects and real test gaps only, not style.

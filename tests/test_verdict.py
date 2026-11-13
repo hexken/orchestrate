@@ -24,6 +24,15 @@ CASES = [
     ("Running the tests now; waiting for the run to finish.\nclean\n\n## Findings\n", "clean"),
     ("# Review\nnote\n## Findings\nclean\n", "unreadable"),
     ("Waiting for task-15.\n" * 12 + "hold\n\n## Commands run\n", "hold"),
+    ("clean\n\n## Findings\n1. low: a missing test\n", "hold"),
+    ("clean\n\n## Findings\nNone.\n", "clean"),
+    ("clean\n\n## Findings\n1. medium: the reader returns None for an empty member\n", "hold"),
+    ("clean\n\n## Findings\n- None.\n", "clean"),
+    ("clean\n\n## Findings\n- No findings\n- nothing to report\n", "clean"),
+    ("clean\n\n## Commands run\n- uv run mypy\n", "clean"),
+    ("clean\n\n## 2. Findings\n- **high** src/a.py:3 race\n", "hold"),
+    ("clean\n## Findings\n- None.\n## Commands run\n- pytest: pass\n", "clean"),
+    ("Verdict: clean\n## Findings\nNone\n  - nested note\n", "clean"),
     ("", None),
 ]
 
@@ -33,6 +42,14 @@ def test_verdict(tmp_path, text, want):
     path = tmp_path / "review.md"
     path.write_text(text)
     assert verdict(path, Review()) == want
+
+
+def test_finding_items():
+    from orchestrate.verdict import finding_items
+
+    text = "hold\n## Findings\n1. a.py:1 bug\n   - detail\n2. None of the rows load\n- None.\n"
+    assert finding_items(text) == ["1. a.py:1 bug", "2. None of the rows load"]
+    assert finding_items("clean\n- a.py:1 bug\n") is None
 
 
 def test_missing_file(tmp_path):

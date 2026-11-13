@@ -10,5 +10,5 @@ Run the fixes' tests, never the whole suite. Do not raise new low-severity items
 <DELIVER>
 The review:
 - a one-line verdict, "clean" or "hold";
-- at most 5 findings of medium severity or above, each with file:line, the failure scenario and the fix.
+- a `## Findings` section: at most 5 findings of medium severity or above as a numbered list, each with file:line, the failure scenario and the fix; `- None.` when there are none. A listed finding turns a clean verdict into a hold.
 Then stop.

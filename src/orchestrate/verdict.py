@@ -3,6 +3,12 @@ from pathlib import Path
 
 from orchestrate.config import Review
 
+FINDINGS_HEADING = re.compile(r"^#+\s*(?:\d+[.)]\s*)?findings\b", re.I)
+LIST_ITEM = re.compile(r"^(?:\d+[.)]|[-*])\s+")
+NO_FINDINGS = re.compile(
+    r"^(?:\d+[.)]|[-*])\s+[\W_]*(?:none|no findings|nothing(?: to report)?)[\W_]*$", re.I
+)
+
 
 def patterns(review: Review) -> tuple[re.Pattern[str], re.Pattern[str]]:
     words = sorted({*review.clean, *review.hold}, key=len, reverse=True)
@@ -14,6 +20,19 @@ def patterns(review: Review) -> tuple[re.Pattern[str], re.Pattern[str]]:
     )
     bare = re.compile(rf"^[\W_]*{group}[\W_]*$")
     return line, bare
+
+
+def finding_items(text: str) -> list[str] | None:
+    items: list[str] = []
+    inside = seen = False
+    for line in text.splitlines():
+        if line.startswith("#"):
+            inside = bool(FINDINGS_HEADING.match(line))
+            seen = seen or inside
+            continue
+        if inside and LIST_ITEM.match(line) and not NO_FINDINGS.match(line.strip()):
+            items.append(line.strip())
+    return items if seen else None
 
 
 def verdict(path: Path, review: Review) -> str | None:
@@ -33,4 +52,6 @@ def verdict(path: Path, review: Review) -> str | None:
     if not found:
         return "unreadable"
     clean = {w.lower() for w in review.clean}
-    return "clean" if found.group(1) in clean else "hold"
+    if found.group(1) not in clean:
+        return "hold"
+    return "hold" if finding_items(path.read_text()) else "clean"
