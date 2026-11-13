@@ -21,7 +21,7 @@ checks = []
 heavy_lock = ""
 theirs_on_conflict = []
 commit_paths = []
-ci_config = ""
+ci_config = []
 ci_ignore = []
 
 [timeouts]

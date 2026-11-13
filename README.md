@@ -82,7 +82,7 @@ A running supervisor reads the config once, at start: after editing `orchestrate
 | | `timeout_minutes` | How long a land waits for the build |
 | | `theirs_on_conflict` | Files where the destination's version wins a merge conflict |
 | | `commit_paths` | Files the checks write that are committed before the push |
-| | `ci_config` | The forge's CI file, relative to the repository; `orch doctor` lists each CI command with no counterpart in `checks` |
+| | `ci_config` | The forge's CI files, relative to the repository; `orch doctor` lists each CI command that equals no check, or no `&&`/`;` part of one |
 | | `ci_ignore` | Regexes: a CI command, or a CI line `orch doctor` cannot parse, that matches one needs no local counterpart (installs, deploys) |
 | `[timeouts]` | `stall_minutes` | An idle agent with nothing new for this long is an event |
 | | `wedged_minutes` | A "working" agent whose transcript is silent this long is an event |

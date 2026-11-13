@@ -1,7 +1,15 @@
 import re
 from dataclasses import dataclass, field
 
-COMMAND_KEYS = ("script", "run", "commands")
+COMMAND_KEYS = (
+    "script",
+    "run",
+    "commands",
+    "before_script",
+    "after_script",
+    "before-script",
+    "after-script",
+)
 NOT_FOLLOWED = ("include", "extends", "uses")
 KEY = re.compile(r"^(?P<lead>\s*(?:-\s+)?)(?P<key>[\w-]+):(?:\s+(?P<value>.*?))?\s*$")
 ITEM = re.compile(r"^(?P<lead>\s*)-\s+(?P<value>.*?)\s*$")
@@ -25,14 +33,26 @@ def unquote(value: str) -> str:
     return value
 
 
-def block(lines: list[str], start: int, column: int) -> tuple[list[str], int]:
+def block(lines: list[str], start: int, column: int, style: str) -> tuple[list[str], int]:
     body = []
     i = start
     while i < len(lines) and (not lines[i].strip() or indent(lines[i]) > column):
         if lines[i].strip():
             body.append(lines[i].strip())
         i += 1
+    if style.startswith(">") and body:
+        return [" ".join(body)], i
     return body, i
+
+
+def continued(lines: list[str], start: int, column: int, steps: Steps) -> int:
+    i = start
+    while i < len(lines) and lines[i].strip() and indent(lines[i]) > column:
+        if KEY.match(lines[i]) or ITEM.match(lines[i]):
+            break
+        steps.unparsed.append((i + 1, lines[i].strip(), "a command continued on the next line"))
+        i += 1
+    return i
 
 
 def items(lines: list[str], start: int, column: int, steps: Steps) -> int:
@@ -51,7 +71,7 @@ def items(lines: list[str], start: int, column: int, steps: Steps) -> int:
             continue
         value = item["value"]
         if value in BLOCK:
-            body, i = block(lines, i + 1, indent(line))
+            body, i = block(lines, i + 1, indent(line), value)
             steps.commands += body
             continue
         steps.commands.append(unquote(value))
@@ -75,11 +95,11 @@ def steps(text: str) -> Steps:
             i += 1
             continue
         if value in BLOCK:
-            body, i = block(lines, i + 1, column)
+            body, i = block(lines, i + 1, column, value)
             found.commands += body
         elif value:
             found.commands.append(unquote(value))
-            i += 1
+            i = continued(lines, i + 1, column, found)
         else:
             i = items(lines, i + 1, column, found)
     return found
@@ -93,8 +113,16 @@ def ignored(text: str, ignore: tuple[str, ...]) -> bool:
     return any(re.search(pattern, text) for pattern in ignore)
 
 
+def segments(check: str) -> set[str]:
+    whole = normal(check)
+    parts = {whole}
+    for part in re.split(r"\s*(?:&&|;)\s*", whole):
+        parts.add(normal(part.strip().removeprefix("(").removesuffix(")")))
+    return parts
+
+
 def uncovered(commands: list[str], checks: tuple[str, ...], ignore: tuple[str, ...]) -> list[str]:
-    local = "\n".join(normal(c) for c in checks)
+    local = set().union(*(segments(c) for c in checks)) if checks else set()
     result = []
     for command in commands:
         text = normal(command)

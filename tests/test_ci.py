@@ -45,6 +45,7 @@ def test_list_of_steps_shape():
         "cd web",
         "npm run build",
         "uv run pytest -q",
+        "echo done",
     ]
     assert found.unparsed == []
 
@@ -82,7 +83,7 @@ def test_doctor_lists_ci_steps_without_local_checks(tmp_path):
     cfg = config(
         tmp_path,
         'ci_config = "ci.yml"\nchecks = ["uv run ruff check . && uv run mypy"]\n'
-        'ci_ignore = ["^uv sync$", "^cd web$"]\n',
+        'ci_ignore = ["^uv sync$", "^cd web$", "^echo "]\n',
     )
     (tmp_path / "myapp" / "ci.yml").write_text(LIST_OF_STEPS)
     lines = [str(line) for line in ci_steps(cfg)]
@@ -126,3 +127,46 @@ def test_uses_steps_are_reported_until_ignored(tmp_path):
         'ci_config = "ci.yml"\n' + ALL + 'ci_ignore = ["actions/checkout"]\n',
     )
     assert [line.state for line in ci_steps(cfg)] == ["ok"]
+
+
+def test_near_misses_are_not_covered():
+    checks = ("npm test:unit", "make lint", "ruff check ./src && uv run mypy")
+    commands = ["npm test", "make", "ruff check .", "uv run mypy"]
+    assert ci.uncovered(commands, checks, ()) == ["npm test", "make", "ruff check ."]
+
+
+def test_parenthesised_segments_are_covered():
+    checks = ("(cd web && npm run build)",)
+    assert ci.uncovered(["cd web", "npm run build"], checks, ()) == []
+
+
+def test_script_hooks_folded_blocks_and_continuations():
+    text = (
+        "job:\n"
+        "  before_script:\n"
+        "    - uv sync\n"
+        "  script: >\n"
+        "    uv run pytest\n"
+        "    -q\n"
+        "  after_script:\n"
+        "    - echo done\n"
+        "other:\n"
+        "  script: make\n"
+        "    --jobs 4\n"
+    )
+    found = ci.steps(text)
+    assert found.commands == ["uv sync", "uv run pytest -q", "echo done", "make"]
+    assert [(n, why) for n, _, why in found.unparsed] == [
+        (11, "a command continued on the next line")
+    ]
+
+
+def test_several_ci_files(tmp_path):
+    cfg = config(tmp_path, 'ci_config = ["a.yml", "b.yml"]\nchecks = ["make"]\n')
+    assert len(cfg.land.ci_config) == 2
+    (tmp_path / "myapp" / "a.yml").write_text("build:\n  script:\n    - make\n")
+    (tmp_path / "myapp" / "b.yml").write_text("lint:\n  script:\n    - make lint\n")
+    lines = ci_steps(cfg)
+    assert [line.state for line in lines] == ["missing"] and "make lint" in lines[0].what
+    single = config(tmp_path, 'ci_config = "a.yml"\nchecks = ["make"]\n')
+    assert [line.state for line in ci_steps(single)] == ["ok"]
