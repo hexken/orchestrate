@@ -4,6 +4,7 @@ repo = "{{repo}}"
 destination = "{{destination}}"
 branch_prefix = "agent/"
 planning_repo = "{{planning_repo}}"
+work_plan = ""
 scratch = "scratch"
 
 [herdr]

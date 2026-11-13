@@ -23,6 +23,7 @@ class Project:
     branch_prefix: str = "agent/"
     planning_repo: Path | None = None
     scratch: str = "scratch"
+    work_plan: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -250,6 +251,7 @@ def load(path: Path) -> Config:
         "project",
         repo=repo,
         planning_repo=expand(planning, base) if planning else None,
+        work_plan=expand(raw_project["work_plan"], base) if raw_project.get("work_plan") else None,
     )
     workspace = expand(raw_project.get("workspace", ".orchestrate"), repo)
     raw_land = table(data, "land")

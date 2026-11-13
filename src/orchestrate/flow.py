@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from orchestrate import briefs
+from orchestrate import breakpoints, briefs
 from orchestrate.adapters import adapter_path
 from orchestrate.config import Config
 from orchestrate.effects import Effects, matches
@@ -442,6 +442,10 @@ def start_unit(
         raise RuntimeError(f"no role {role!r} in the config")
     worktree = str(Path(worktree).expanduser().resolve())
     name = unit_id.lower()
+    breakpoints.auto_milestone(ctx.ws, ctx.config.project.work_plan, unit_id)
+    blocker = breakpoints.blocking(ctx.ws, unit_id)
+    if blocker:
+        raise RuntimeError(f"breakpoint {blocker} is pending: {unit_id} waits for its pass")
     with ctx.ws.lock():
         units = ctx.ws.load()
         for key, other in units.items():

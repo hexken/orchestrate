@@ -10,7 +10,17 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from orchestrate import conform, doctor, flow, report, scaffold, specgate, watch, worktrees
+from orchestrate import (
+    breakpoints,
+    conform,
+    doctor,
+    flow,
+    report,
+    scaffold,
+    specgate,
+    watch,
+    worktrees,
+)
 from orchestrate.adapters import Harness, Land, adapter_path
 from orchestrate.config import ConfigError, load
 from orchestrate.effects import Effects
@@ -69,6 +79,7 @@ def supervise_once(ctx: flow.Ctx) -> list[str]:
             if event:
                 events.append(f"EVENT: {key} {event}")
         ctx.ws.save(units)
+    events += [f"EVENT: - breakpoint {n} reached" for n in breakpoints.reached(ctx.ws, units)]
     if not events and not any(u["status"] in ACTIVE for u in units.values()):
         events.append("EVENT: - no active units")
     return events
@@ -261,6 +272,33 @@ def cmd_install_acceptance(ctx: flow.Ctx, args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_breakpoint(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    if args.action == "list":
+        for name, point in breakpoints.load(ctx.ws).items():
+            waits = ", ".join(point["after"]) or "-"
+            print(f"{name:20} {point['status']:8} {point['kind']:9} after {waits}")
+        return 0
+    if not args.name:
+        raise RuntimeError(f"breakpoint {args.action} needs a name")
+    if args.action == "pass":
+        breakpoints.pass_(ctx.ws, args.name)
+        print(f"breakpoint {args.name} passed")
+        return 0
+    if args.milestone:
+        name = breakpoints.milestone(ctx.ws, ctx.config.project.work_plan, args.milestone)
+        print(f"breakpoint {name} added")
+        return 0
+    if not breakpoints.valid_name(args.name):
+        raise RuntimeError("a breakpoint name is lower-case letters, digits and dashes")
+    after = breakpoints.active(ctx.ws.load()) if args.now else (args.after or "").split(",")
+    after = [a for a in after if a]
+    if not after and not args.now:
+        raise RuntimeError("give --after UNIT[,UNIT], --now or --milestone N")
+    breakpoints.add(ctx.ws, args.name, after)
+    print(f"breakpoint {args.name} added after {', '.join(after) or 'nothing running'}")
+    return 0
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -279,6 +317,7 @@ COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "report": cmd_report,
     "scan": cmd_scan,
     "install-acceptance": cmd_install_acceptance,
+    "breakpoint": cmd_breakpoint,
 }
 STANDALONE = ("doctor", "scaffold")
 
@@ -299,6 +338,12 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--once", action="store_true")
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
+    point = sub.add_parser("breakpoint", help="add, list or pass a breakpoint")
+    point.add_argument("action", choices=("add", "list", "pass"))
+    point.add_argument("name", nargs="?")
+    point.add_argument("--after", help="comma-separated units it waits for")
+    point.add_argument("--now", action="store_true", help="wait for the units running now")
+    point.add_argument("--milestone", help="wait for every unit of this milestone")
     scan = sub.add_parser("scan", help="spec gate: scenario titles and guarantees vs tests")
     scan.add_argument("--worktree")
     inst = sub.add_parser("install-acceptance", help="spec gate: install drafted acceptance tests")
