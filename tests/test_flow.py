@@ -326,6 +326,27 @@ def test_resume_landing_takes_the_current_head_as_checked(ctx, unit):
     assert unit["land_head"] == "h9"
 
 
+def test_resume_landing_after_a_land_failure_keeps_the_checked_head(ctx, unit):
+    landing(ctx, unit, "LANDED PR #3 FAILED h1")
+    assert tick(ctx, unit).startswith("land:")
+    ctx.fx.heads["a-1"] = "h9"
+    flow.resume(ctx, unit, "landing")
+    assert unit["checked_head"] == "h1"
+    flow.reland(ctx, unit)
+    finish(unit, "land", "LANDED PR #3 SUCCESSFUL h9")
+    assert "moved past" in tick(ctx, unit)
+    assert ctx.fx.merged == []
+
+
+def test_resume_landing_accepts_the_head_when_asked(ctx, unit):
+    landing(ctx, unit, "LANDED PR #3 FAILED h1")
+    tick(ctx, unit)
+    ctx.fx.heads["a-1"] = "h9"
+    flow.resume(ctx, unit, "landing", accept_head=True)
+    assert unit["checked_head"] == "h9"
+    assert any("accepted h9" in what for _, what in unit["timeline"])
+
+
 def test_reviews_diff_against_the_merge_base(ctx, unit):
     ctx.fx.base_at = "mb7"
     build_done(ctx, unit)

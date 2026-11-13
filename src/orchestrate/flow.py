@@ -14,6 +14,7 @@ from orchestrate.registry import Unit, Workspace
 from orchestrate.scaffold import TEMPLATES
 from orchestrate.verdict import FIXES_HEADING, verdict
 
+MOVED = "the branch moved past the reviewed head with new commits"
 BUILD_MINUTES = re.compile(r"^BUILD-MINUTES\s+(\d+(?:\.\d+)?)\s*$", re.M)
 FIXES = FIXES_HEADING
 PRINT_DELIVER = (
@@ -353,8 +354,8 @@ def landed(ctx: Ctx, unit: Unit) -> str | None:
         if not ctx.fx.merge_only(unit, unit["checked_head"]):
             return ctx.ws.wait(
                 unit,
-                "the branch moved past the reviewed head with new commits: review them, then "
-                "`resume <UNIT> landing` (it lands the current head) or `resume <UNIT> fixing`",
+                f"{MOVED}: review them, then `resume <UNIT> landing` (it lands the current "
+                "head) or `resume <UNIT> fixing`",
             )
         ctx.ws.mark(unit, f"refreshed with {ctx.config.project.destination} at {head}: landing")
         unit["checked_head"] = head
@@ -566,11 +567,12 @@ def restart_missing_reviews(ctx: Ctx, unit: Unit) -> None:
             )
 
 
-def resume(ctx: Ctx, unit: Unit, status: str) -> None:
+def resume(ctx: Ctx, unit: Unit, status: str, accept_head: bool = False) -> None:
     if status not in ("building", "reviewing", "fixing", "light", "landing"):
         raise RuntimeError("resume to building, reviewing, fixing, light or landing")
     if status == "light" and not ctx.config.pipeline[unit["harness"]].light:
         raise RuntimeError(f"the {unit['harness']} pipeline has no light review")
+    moved = str(unit.get("event") or "").startswith(MOVED)
     unit["status"], unit["event"] = status, None
     reset_timers(unit)
     if status == "fixing":
@@ -579,9 +581,9 @@ def resume(ctx: Ctx, unit: Unit, status: str) -> None:
         unit.setdefault("review_files", unit.get("required", []))
     if status in ("reviewing", "light"):
         restart_missing_reviews(ctx, unit)
-    if status == "landing":
+    if status == "landing" and (accept_head or moved):
         unit["checked_head"] = ctx.fx.head(unit)
-        ctx.ws.mark(unit, f"resumed to landing at {unit['checked_head']}")
+        ctx.ws.mark(unit, f"resumed to landing; accepted {unit['checked_head']} as checked")
         return
     ctx.ws.mark(unit, f"resumed to {status}")
 

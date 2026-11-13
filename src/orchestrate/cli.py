@@ -158,7 +158,7 @@ def cmd_timeline(ctx: flow.Ctx, args: argparse.Namespace) -> int:
 
 
 def cmd_resume(ctx: flow.Ctx, args: argparse.Namespace) -> int:
-    edit(ctx, args.unit, lambda unit: flow.resume(ctx, unit, args.status))
+    edit(ctx, args.unit, lambda unit: flow.resume(ctx, unit, args.status, args.accept_head))
     return 0
 
 
@@ -448,6 +448,11 @@ def parser() -> argparse.ArgumentParser:
     resume = sub.add_parser("resume", help="put a unit back in a status after an event")
     resume.add_argument("unit")
     resume.add_argument("status")
+    resume.add_argument(
+        "--accept-head",
+        action="store_true",
+        help="landing: take the branch's current head as checked (after you have checked it)",
+    )
     merge = sub.add_parser("merge", help="merge a unit's PR by hand")
     merge.add_argument("unit")
     merge.add_argument("--force", action="store_true")
