@@ -349,6 +349,13 @@ def cmd_compact(ctx: flow.Ctx, args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
+def cmd_skills_sync(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    path = adapter_path(ctx.ws.root, "harness", args.harness)
+    Harness(path).skills_sync([str(Path(p).resolve()) for p in args.paths])
+    print(f"synced {len(args.paths)} skill(s) for {args.harness}")
+    return 0
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -370,6 +377,7 @@ COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "breakpoint": cmd_breakpoint,
     "align": cmd_align,
     "compact": cmd_compact,
+    "skills-sync": cmd_skills_sync,
 }
 STANDALONE = ("doctor", "scaffold")
 
@@ -390,6 +398,9 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--once", action="store_true")
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
+    sync = sub.add_parser("skills-sync", help="copy skills where a harness needs real files")
+    sync.add_argument("harness")
+    sync.add_argument("paths", nargs="+")
     squeeze = sub.add_parser("compact", help="narration candidates; check a conservative pass")
     squeeze.add_argument("action", choices=("scan", "verify"))
     squeeze.add_argument("paths", nargs="+")
