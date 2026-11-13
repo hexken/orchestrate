@@ -275,6 +275,15 @@ def test_a_deferred_low_finding_still_lands(ctx, unit):
     assert event is None and unit["status"] == "landing"
 
 
+def test_a_sentence_starting_with_fixes_is_not_a_fixes_section(ctx, unit):
+    unit.update(status="fixing", fixes_sent=ctx.fx.clock - 5, review_files=[])
+    write(ctx, flow.summary(ctx, unit), "# A-1\nFixes the race in commit by locking first.\n")
+    ctx.fx.states["a-1"] = "idle"
+    assert flow.step(ctx, unit) is None
+    assert tick(ctx, unit) is None
+    assert unit["status"] == "fixing"
+
+
 def test_resume_light_refused_without_light_review(ctx, unit):
     unit["status"] = "waiting"
     with pytest.raises(RuntimeError, match="no light review"):

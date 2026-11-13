@@ -34,7 +34,7 @@ FIX_ITEM = re.compile(
     r"^(?:[-*]|\d+[.)])\s+[*_`]*(?P<who>[\w.-]+?)(?:\.md)?\s*#(?P<n>\d+)[*_`]*"
     r"\s*(?:\((?P<severity>[^)]*)\))?(?P<rest>.*)$"
 )
-STATUS = re.compile(r":[*_`\s]*(fixed|declined|deferred)\b(?!-)", re.I)
+STATUS = re.compile(r":[*_`\s]*(?:(fixed)\s+(?:in\b|\()|(declined)\s*[:(]|(deferred)\s*[:(])", re.I)
 OUTCOMES = ("fixed", "declined", "deferred")
 USAGE_KEYS = (
     "input_tokens",
@@ -98,8 +98,8 @@ def fixes(summary: Path, unit: str = "") -> list[dict[str, str]]:
         item = FIX_ITEM.match(line)
         if not item:
             continue
-        outcomes = STATUS.findall(item["rest"])
-        if not outcomes:
+        status = STATUS.search(item["rest"])
+        if not status:
             continue
         who = item["who"].removeprefix(f"{unit}-") if unit else item["who"]
         result.append(
@@ -107,7 +107,7 @@ def fixes(summary: Path, unit: str = "") -> list[dict[str, str]]:
                 "reviewer": who,
                 "n": item["n"],
                 "severity": (item["severity"] or "unlabelled").strip().lower(),
-                "outcome": outcomes[-1].lower(),
+                "outcome": next(g for g in status.groups() if g).lower(),
             }
         )
     return result

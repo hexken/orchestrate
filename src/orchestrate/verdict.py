@@ -3,7 +3,11 @@ from pathlib import Path
 
 from orchestrate.config import Review
 
-FIXES_HEADING = re.compile(r"^(?:#+[ \t]*|\*\*|__)?[ \t]*fixes\b", re.I | re.M)
+FIXES_HEADING = re.compile(
+    r"^(?:#+[ \t]*fixes\b[^\n]*|(?:\*\*|__)[ \t]*fixes\b[^*_\n]*(?:\*\*|__):?[ \t]*"
+    r"|fixes[ \t]*:?[ \t]*)$",
+    re.I | re.M,
+)
 HEADING = re.compile(r"^(#+)\s*(.*)$")
 BOLD = re.compile(r"^(?:\*\*|__)(?P<text>[^*_]+?)(?:\*\*|__):?$")
 FENCE = re.compile(r"^\s*(?:```|~~~)")

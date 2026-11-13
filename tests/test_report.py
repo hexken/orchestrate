@@ -216,3 +216,24 @@ def test_fixes_ignores_nested_bullets_and_reads_every_round(tmp_path):
         ("reviewer", "2", "declined"),
         ("second_reviewer", "1", "fixed"),
     ]
+
+
+def test_the_first_strict_status_wins(tmp_path):
+    from orchestrate.report import fixes
+
+    path = tmp_path / "A-1.md"
+    path.write_text(
+        "## Fixes\n- reviewer #1 (high): race: declined: fixed elsewhere in abc1234\n"
+        "- reviewer #2 (low): the fixed: header: deferred: INBOX\n"
+    )
+    assert [f["outcome"] for f in fixes(path, "A-1")] == ["declined", "deferred"]
+
+
+def test_a_sentence_starting_with_fixes_is_no_section(tmp_path):
+    from orchestrate.report import fixes
+
+    path = tmp_path / "A-1.md"
+    path.write_text("# A-1\nFixes the race in commit.\n- reviewer #1 (high): x: fixed in a1b2c3d\n")
+    assert fixes(path, "A-1") == []
+    path.write_text("# A-1\nFixes:\n- reviewer #1 (high): x: fixed in a1b2c3d\n")
+    assert len(fixes(path, "A-1")) == 1
