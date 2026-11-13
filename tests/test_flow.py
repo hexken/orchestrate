@@ -415,12 +415,41 @@ def test_sibling_merge_prompts_builders_still_at_work(ctx, unit):
     }
     ctx.fx.fail_prompt.add("d-1")
     flow.refresh_siblings(ctx, units, units["A-1"])
-    assert [name for name, _ in ctx.fx.prompts] == ["b-1", "e-1"]
+    assert [name for name, _ in ctx.fx.prompts] == ["b-1"]
+    assert "A-1 merged" in units["E-1"]["refresh_pending"]
     text = ctx.fx.prompts[0][1]
     assert "main moved: A-1 merged as pull request #7" in text
     assert "merge origin/main" in text.lower()
     assert "refresh prompt failed" in units["D-1"]["timeline"][-1][1]
     assert "told to merge main after A-1" in units["B-1"]["timeline"][-1][1]
+
+
+def queued(ctx, unit):
+    build_done(ctx, unit)
+    units = {"Z-1": {**unit, "unit": "Z-1", "name": "z-1", "status": "merged", "pr": "7"}}
+    units["A-1"] = unit
+    flow.refresh_siblings(ctx, units, units["Z-1"])
+    assert ctx.fx.prompts == [] and "refresh_pending" in unit
+    ctx.fx.clock += 5
+    return review_paths(ctx, unit)
+
+
+def test_a_queued_refresh_goes_out_with_the_fixes(ctx, unit):
+    paths = queued(ctx, unit)
+    write(ctx, paths["reviewer"], "changes needed\n")
+    write(ctx, paths["second_reviewer"], "clean\n")
+    assert tick(ctx, unit) is None and unit["status"] == "fixing"
+    assert [name for name, _ in ctx.fx.prompts] == ["a-1", "a-1"]
+    assert "Z-1 merged" in ctx.fx.prompts[1][1] and "refresh_pending" not in unit
+
+
+def test_a_queued_refresh_goes_out_when_the_reviews_are_clean(ctx, unit):
+    paths = queued(ctx, unit)
+    for path in paths.values():
+        write(ctx, path, "clean\n")
+    assert tick(ctx, unit) is None and unit["status"] == "landing"
+    assert [name for name, _ in ctx.fx.prompts] == ["a-1"]
+    assert "refresh_pending" not in unit
 
 
 def test_refresh_uses_the_project_brief(ctx, unit):

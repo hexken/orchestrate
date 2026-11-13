@@ -210,6 +210,7 @@ def start_fixes(ctx: Ctx, unit: Unit) -> None:
         "'## Fixes' section to your summary, then stop.",
     )
     ctx.ws.mark(unit, "fixes sent to the builder")
+    send_refresh(ctx, unit)
 
 
 def land_checked(ctx: Ctx, unit: Unit) -> None:
@@ -424,6 +425,7 @@ def reviews_step(ctx: Ctx, unit: Unit) -> str | None:
         return None
     unit["status"] = "landing"
     ctx.ws.mark(unit, "reviews clean")
+    send_refresh(ctx, unit)
     return landed(ctx, unit)
 
 
@@ -607,7 +609,20 @@ def resume(ctx: Ctx, unit: Unit, status: str, accept_head: bool = False) -> None
     ctx.ws.mark(unit, f"resumed to {status}")
 
 
-REFRESHED = ("building", "reviewing", "fixing")
+REFRESHED = ("building", "fixing")
+QUEUED = ("reviewing", "light")
+
+
+def send_refresh(ctx: Ctx, unit: Unit) -> None:
+    text = unit.pop("refresh_pending", None)
+    if not text:
+        return
+    try:
+        ctx.fx.prompt(unit["name"], text)
+    except Exception as err:
+        ctx.ws.mark(unit, f"refresh prompt failed: {err}")
+        return
+    ctx.ws.mark(unit, "queued refresh sent")
 
 
 def refresh_siblings(ctx: Ctx, units: dict[str, Unit], merged: Unit) -> None:
@@ -621,15 +636,22 @@ def refresh_siblings(ctx: Ctx, units: dict[str, Unit], merged: Unit) -> None:
             "PR": f"#{merged.get('pr', '?')}",
         },
     ).strip()
+    destination = ctx.config.project.destination
     for other in units.values():
-        if other is merged or other["status"] not in REFRESHED:
+        if other is merged:
+            continue
+        if other["status"] in QUEUED:
+            other["refresh_pending"] = text
+            ctx.ws.mark(other, f"refresh after {merged['unit']} queued until the reviews end")
+            continue
+        if other["status"] not in REFRESHED:
             continue
         try:
             ctx.fx.prompt(other["name"], text)
         except Exception as err:
             ctx.ws.mark(other, f"refresh prompt failed: {err}")
             continue
-        ctx.ws.mark(other, f"told to merge {ctx.config.project.destination} after {merged['unit']}")
+        ctx.ws.mark(other, f"told to merge {destination} after {merged['unit']}")
 
 
 def reland(ctx: Ctx, unit: Unit) -> None:
