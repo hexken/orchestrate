@@ -219,6 +219,15 @@ def test_hold_sends_fixes_then_lands_without_light_review(ctx, unit):
     assert any("fixes in at h2: landing" in what for _, what in unit["timeline"])
 
 
+def test_a_bullet_starting_with_fixes_is_not_a_fixes_section(ctx, unit):
+    unit.update(status="fixing", fixes_sent=ctx.fx.clock - 5, review_files=[])
+    write(ctx, flow.summary(ctx, unit), "# A-1\n- fixes the flaky test from the last unit\n")
+    ctx.fx.states["a-1"] = "idle"
+    assert flow.step(ctx, unit) is None
+    assert tick(ctx, unit) is None
+    assert unit["status"] == "fixing"
+
+
 def test_resume_light_refused_without_light_review(ctx, unit):
     unit["status"] = "waiting"
     with pytest.raises(RuntimeError, match="no light review"):
@@ -465,3 +474,16 @@ def test_supervisor_refreshes_siblings_after_a_merge(ctx, unit, monkeypatch):
     assert "EVENT: A-1 merged" in events
     assert [name for name, _ in ctx.fx.prompts] == ["b-1"]
     assert "told to merge main after A-1" in ctx.ws.load()["B-1"]["timeline"][-1][1]
+
+
+def test_hand_merge_refreshes_siblings(ctx, unit):
+    import argparse
+
+    from orchestrate import cli
+
+    landing(ctx, unit, "LANDED PR #3 SUCCESSFUL h1")
+    sibling = {**unit, "unit": "B-1", "name": "b-1", "status": "fixing", "jobs": {}}
+    ctx.ws.save({"A-1": unit, "B-1": sibling})
+    assert cli.cmd_merge(ctx, argparse.Namespace(unit="A-1", force=False)) == 0
+    assert ctx.fx.merged == ["3"] and [name for name, _ in ctx.fx.prompts] == ["b-1"]
+    assert ctx.ws.load()["A-1"]["status"] == "merged"

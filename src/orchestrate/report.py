@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from orchestrate.registry import Workspace
-from orchestrate.verdict import finding_items
+from orchestrate.verdict import FIXES_HEADING, finding_items
 
 STAGES = (
     ("building", "started on", "summary written"),
@@ -29,7 +29,6 @@ EVENT_KINDS = (
     ("error", "error:"),
 )
 FINDING = re.compile(r"^\s*(?:\d+[.)]|[-*])\s+.*?[\w./-]+\.\w+:\d+")
-FIXES_HEADING = re.compile(r"^\W*#*\W*fixes\b", re.I)
 FIX_ITEM = re.compile(
     r"^(?:[-*]|\d+[.)])\s+[*_`]*(?P<who>[\w.-]+?)(?:\.md)?\s*#(?P<n>\d+)[*_`]*"
     r"\s*(?:\((?P<severity>[^)]*)\))?(?P<rest>.*)$"
@@ -78,15 +77,15 @@ def findings(path: Path) -> int:
 
 
 def fixes_section(text: str) -> list[str]:
-    lines = text.splitlines()
-    starts = [i for i, line in enumerate(lines) if FIXES_HEADING.match(line)]
-    if not starts:
-        return []
     section = []
-    for line in lines[starts[-1] + 1 :]:
-        if line.startswith("#"):
-            break
-        section.append(line)
+    inside = False
+    for line in text.splitlines():
+        if FIXES_HEADING.match(line):
+            inside = True
+        elif line.startswith("#"):
+            inside = False
+        elif inside:
+            section.append(line)
     return section
 
 

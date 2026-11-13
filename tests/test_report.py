@@ -196,3 +196,23 @@ def test_review_yield_with_light_review(tmp_path):
     assert reviews["A-1-second_reviewer.md"]["declined"] == 1
     assert reviews["A-1-light.md"]["findings"] == 1
     assert reviews["A-1-light.md"]["fixed"] == 1
+
+
+def test_fixes_ignores_nested_bullets_and_reads_every_round(tmp_path):
+    from orchestrate.report import fixes
+
+    path = tmp_path / "A-1.md"
+    path.write_text(
+        "# A-1\n## Fixes\n"
+        "- reviewer #1 (high): race: fixed in abc1234; fails without the fix: test_race\n"
+        "  - fixes the lock order first\n"
+        "- reviewer #2 (low): gap: declined: out of scope\n"
+        "## Checks\n- fixes nothing: fixed in x\n"
+        "## Fixes (round 2)\n"
+        "- second_reviewer #1 (medium): retry: fixed in bcd2345; fails without the fix: test_r\n"
+    )
+    assert [(f["reviewer"], f["n"], f["outcome"]) for f in fixes(path, "A-1")] == [
+        ("reviewer", "1", "fixed"),
+        ("reviewer", "2", "declined"),
+        ("second_reviewer", "1", "fixed"),
+    ]

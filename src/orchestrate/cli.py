@@ -168,7 +168,13 @@ def cmd_reland(ctx: flow.Ctx, args: argparse.Namespace) -> int:
 
 
 def cmd_merge(ctx: flow.Ctx, args: argparse.Namespace) -> int:
-    edit(ctx, args.unit, lambda unit: flow.merge(ctx, unit, args.force))
+    with ctx.ws.lock():
+        units = ctx.ws.load()
+        if args.unit not in units:
+            raise RuntimeError(f"no unit {args.unit}")
+        flow.merge(ctx, units[args.unit], args.force)
+        flow.refresh_siblings(ctx, units, units[args.unit])
+        ctx.ws.save(units)
     return 0
 
 

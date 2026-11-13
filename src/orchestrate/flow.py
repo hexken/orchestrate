@@ -12,10 +12,10 @@ from orchestrate.config import Config
 from orchestrate.effects import Effects, matches
 from orchestrate.registry import Unit, Workspace
 from orchestrate.scaffold import TEMPLATES
-from orchestrate.verdict import verdict
+from orchestrate.verdict import FIXES_HEADING, verdict
 
 BUILD_MINUTES = re.compile(r"^BUILD-MINUTES\s+(\d+(?:\.\d+)?)\s*$", re.M)
-FIXES = re.compile(r"^\W*#*\W*fixes\b", re.M | re.I)
+FIXES = FIXES_HEADING
 PRINT_DELIVER = (
     "Write no file: your whole final answer is the review, in Markdown, and it is saved for "
     "you. This checkout is a throwaway worktree, so checkouts in it are safe."
