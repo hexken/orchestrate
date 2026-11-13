@@ -3,10 +3,12 @@ import re
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
+from statistics import median
 from typing import Any
 
+from orchestrate.config import Review
 from orchestrate.registry import Workspace
-from orchestrate.verdict import FIXES_HEADING, finding_items
+from orchestrate.verdict import FIXES_HEADING, finding_items, verdict
 
 STAGES = (
     ("building", "started on", "summary written"),
@@ -177,7 +179,33 @@ def unit_report(folder: Path) -> dict[str, Any]:
     }
 
 
-def build(ws: Workspace, since: str | None = None) -> dict[str, Any]:
+STAGE_NAMES = tuple(name for name, _, _ in STAGES)
+
+
+def by_size(units: list[dict[str, Any]], sizes: dict[str, str]) -> dict[str, Any]:
+    groups: dict[str, list[dict[str, float]]] = defaultdict(list)
+    for unit in units:
+        if unit["unit"] in sizes:
+            groups[sizes[unit["unit"]]].append(unit["stages"])
+    result: dict[str, Any] = {}
+    for size, stages in sorted(groups.items()):
+        middle = {name: median(s.get(name, 0.0) for s in stages) for name in STAGE_NAMES}
+        middle["total"] = median(sum(s.values()) for s in stages)
+        result[size] = {"units": len(stages), "median": middle}
+    return result
+
+
+def replay(ws: Workspace, review: Review) -> list[tuple[str, str, str | None, int]]:
+    rows = []
+    for folder in sorted(p for p in ws.archive.glob("*") if (p / "unit.json").exists()):
+        for path in sorted(folder.glob(f"{folder.name}-*.md")):
+            rows.append((folder.name, path.name, verdict(path, review), findings(path)))
+    return rows
+
+
+def build(
+    ws: Workspace, since: str | None = None, sizes: dict[str, str] | None = None
+) -> dict[str, Any]:
     units = []
     for folder in sorted(p for p in ws.archive.glob("*") if (p / "unit.json").exists()):
         report = unit_report(folder)
@@ -198,7 +226,10 @@ def build(ws: Workspace, since: str | None = None) -> dict[str, Any]:
             for model, counts in models.items():
                 for key, value in counts.items():
                     tokens[f"{role} / {model}"][key] += value
-    return {"units": units, "reviewers": dict(by_role), "tokens": dict(tokens)}
+    data: dict[str, Any] = {"units": units, "reviewers": dict(by_role), "tokens": dict(tokens)}
+    if sizes:
+        data["sizes"] = by_size(units, sizes)
+    return data
 
 
 def markdown(data: dict[str, Any]) -> str:
@@ -236,6 +267,18 @@ def markdown(data: dict[str, Any]) -> str:
             f"| {role} | {r['reviews']} | {r['findings']} | {r['fixed']} | {r['declined']} "
             f"| {r['deferred']} |"
         )
+    if data.get("sizes"):
+        out += [
+            "",
+            "## Median minutes by size",
+            "",
+            "| size | units | build | review | fix | light | land | total |",
+            "|---|---|---|---|---|---|---|---|",
+        ]
+        for size, row in data["sizes"].items():
+            m = row["median"]
+            middle = " | ".join(f"{m[k]:g}" for k in (*STAGE_NAMES, "total"))
+            out.append(f"| {size} | {row['units']} | {middle} |")
     out += [
         "",
         "## Tokens",

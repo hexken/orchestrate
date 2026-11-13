@@ -237,3 +237,49 @@ def test_a_sentence_starting_with_fixes_is_no_section(tmp_path):
     assert fixes(path, "A-1") == []
     path.write_text("# A-1\nFixes:\n- reviewer #1 (high): x: fixed in a1b2c3d\n")
     assert len(fixes(path, "A-1")) == 1
+
+
+def test_replay_prints_every_archived_review(tmp_path, capsys):
+    from orchestrate.config import Review
+    from orchestrate.report import replay
+
+    ws = fixture(tmp_path)
+    rows = replay(ws, Review())
+    assert rows == [
+        ("A-1", "A-1-light.md", "clean", 0),
+        ("A-1", "A-1-reviewer.md", "hold", 1),
+        ("A-1", "A-1-second_reviewer.md", "hold", 2),
+        ("B-1", "B-1-reviewer.md", "clean", 0),
+    ]
+
+
+def test_verdict_replay_cli(project, capsys):
+    fixture(project["ws"])
+    assert main(["--config", str(project["config"]), "verdict", "--replay"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == "A-1/A-1-light.md\tclean\t0" and len(out) == 4
+
+
+def test_verdict_of_given_files(project, tmp_path, capsys):
+    review = tmp_path / "r.md"
+    review.write_text("clean\n## Findings\n1. high: race\n")
+    assert main(["--config", str(project["config"]), "verdict", str(review)]) == 0
+    assert capsys.readouterr().out == f"{review}\thold\t1\n"
+
+
+def test_median_stage_times_by_size(tmp_path):
+    data = build(fixture(tmp_path), sizes={"A-1": "M", "B-1": "S"})
+    assert data["sizes"]["M"] == {
+        "units": 1,
+        "median": {
+            "building": 40.0,
+            "reviewing": 20.0,
+            "fixing": 15.0,
+            "light": 10.0,
+            "landing": 12.0,
+            "total": 97.0,
+        },
+    }
+    assert data["sizes"]["S"]["median"]["total"] == 50.0
+    assert "| S | 1 | 30 | 15 | 0 | 0 | 5 | 50 |" in markdown(data)
+    assert "sizes" not in build(fixture(tmp_path / "x"))

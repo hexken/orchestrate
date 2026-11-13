@@ -25,10 +25,10 @@ def save(ws: Workspace, points: dict[str, Breakpoint]) -> None:
     path(ws).write_text(json.dumps(points, indent=2) + "\n")
 
 
-def plan_units(work_plan: Path | None) -> dict[str, str]:
+def plan_rows(work_plan: Path | None) -> list[dict[str, str]]:
     if work_plan is None or not work_plan.exists():
-        return {}
-    units: dict[str, str] = {}
+        return []
+    rows: list[dict[str, str]] = []
     header: list[str] | None = None
     for line in work_plan.read_text().splitlines():
         if not line.startswith("|"):
@@ -40,9 +40,17 @@ def plan_units(work_plan: Path | None) -> dict[str, str]:
             continue
         if set("".join(cells)) <= set("-: "):
             continue
-        if "id" in header and "milestone" in header and len(cells) == len(header):
-            units[cells[header.index("id")]] = cells[header.index("milestone")]
-    return units
+        if "id" in header and len(cells) == len(header):
+            rows.append(dict(zip(header, cells, strict=True)))
+    return rows
+
+
+def plan_units(work_plan: Path | None) -> dict[str, str]:
+    return {r["id"]: r["milestone"] for r in plan_rows(work_plan) if "milestone" in r}
+
+
+def plan_sizes(work_plan: Path | None) -> dict[str, str]:
+    return {r["id"]: r["size"] for r in plan_rows(work_plan) if r.get("size")}
 
 
 def add(

@@ -53,7 +53,8 @@ In a set-up project, run `.orchestrate/bin/orch <verb>`. Before setup, run `uv r
 | `compact scan PATH…`, `compact verify BEFORE AFTER` / `--rev REV PATH` | Change-narration candidates; refuses a conservative pass that lost meaning |
 | `scan` | Spec gate: scenario titles and guarantees against the acceptance tests |
 | `install-acceptance [--sync]` | Spec gate: installs drafted acceptance tests after the checks pass |
-| `report [--since DATE] [--json]` | Stage times, fix rounds, events, review yield and tokens per role |
+| `report [--since DATE] [--json]` | Stage times, fix rounds, build minutes, events, review yield and tokens per role; median minutes by size when the work plan has a `Size` column |
+| `verdict FILE…`, `verdict --replay` | The verdict and finding count `orch` reads from review files, or from every archived review: run it before and after a verdict-rule change and diff the two |
 | `skills-sync HARNESS PATH…` | Copies skills where a harness needs real files |
 
 A running supervisor reads the config once, at start: after editing `orchestrate.toml` or the package, `orch stop` and start it again. Never edit a shell adapter while a job is running it, because bash reads a script as it runs.

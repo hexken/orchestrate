@@ -21,6 +21,7 @@ from orchestrate import (
     scaffold,
     sources,
     specgate,
+    verdict,
     watch,
     worktrees,
 )
@@ -255,8 +256,25 @@ def cmd_worktrees(ctx: flow.Ctx, args: argparse.Namespace) -> int:
 
 
 def cmd_report(ctx: flow.Ctx, args: argparse.Namespace) -> int:
-    data = report.build(ctx.ws, args.since)
+    sizes = breakpoints.plan_sizes(ctx.config.project.work_plan)
+    data = report.build(ctx.ws, args.since, sizes)
     print(json.dumps(data, indent=1) if args.json else report.markdown(data), end="")
+    return 0
+
+
+def cmd_verdict(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    if args.replay:
+        rows = [
+            (f"{unit}/{name}", v, n)
+            for unit, name, v, n in report.replay(ctx.ws, ctx.config.review)
+        ]
+    else:
+        rows = [
+            (path, verdict.verdict(Path(path), ctx.config.review), report.findings(Path(path)))
+            for path in args.files
+        ]
+    for where, outcome, count in rows:
+        print(f"{where}\t{outcome}\t{count}")
     return 0
 
 
@@ -381,6 +399,7 @@ COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "watch": cmd_watch,
     "worktrees": cmd_worktrees,
     "report": cmd_report,
+    "verdict": cmd_verdict,
     "scan": cmd_scan,
     "install-acceptance": cmd_install_acceptance,
     "breakpoint": cmd_breakpoint,
@@ -430,6 +449,9 @@ def parser() -> argparse.ArgumentParser:
     rep = sub.add_parser("report", help="stage times, review yield and tokens from the logs")
     rep.add_argument("--since", help="only units started on or after this date (YYYY-MM-DD)")
     rep.add_argument("--json", action="store_true")
+    ver = sub.add_parser("verdict", help="verdict and finding count of review files")
+    ver.add_argument("files", nargs="*")
+    ver.add_argument("--replay", action="store_true", help="every archived review")
     trees = sub.add_parser("worktrees", help="create unit worktrees and their push checkouts")
     trees.add_argument("--count", type=int, default=2)
     sub.add_parser("doctor", help="check the prerequisites")
