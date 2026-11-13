@@ -1,5 +1,6 @@
 import argparse
 import fcntl
+import json
 import os
 import signal
 import subprocess
@@ -9,7 +10,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from orchestrate import conform, doctor, flow, scaffold, watch, worktrees
+from orchestrate import conform, doctor, flow, report, scaffold, watch, worktrees
 from orchestrate.adapters import Harness, Land, adapter_path
 from orchestrate.config import ConfigError, load
 from orchestrate.effects import Effects
@@ -230,6 +231,12 @@ def cmd_worktrees(ctx: flow.Ctx, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    data = report.build(ctx.ws, args.since)
+    print(json.dumps(data, indent=1) if args.json else report.markdown(data), end="")
+    return 0
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -245,6 +252,7 @@ COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "conform": cmd_conform,
     "watch": cmd_watch,
     "worktrees": cmd_worktrees,
+    "report": cmd_report,
 }
 STANDALONE = ("doctor", "scaffold")
 
@@ -265,6 +273,9 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--once", action="store_true")
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
+    rep = sub.add_parser("report", help="stage times, review yield and tokens from the logs")
+    rep.add_argument("--since", help="only units started on or after this date (YYYY-MM-DD)")
+    rep.add_argument("--json", action="store_true")
     trees = sub.add_parser("worktrees", help="create unit worktrees and their push checkouts")
     trees.add_argument("--count", type=int, default=2)
     sub.add_parser("doctor", help="check the prerequisites")
