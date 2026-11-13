@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+echo "bkt $*" >>"${FAKE_LOG:-/dev/null}"
+state=${FAKE_BKT_DIR:?}
+mkdir -p "$state"
+case "$1 $2" in
+  "auth status") [[ -z ${FAKE_BKT_LOGGED_OUT:-} ]] ;;
+  "pr list")
+    python3 - "$state" <<'PY'
+import json, os, sys
+path = os.path.join(sys.argv[1], "prs.json")
+prs = json.load(open(path)) if os.path.exists(path) else []
+print(json.dumps([{"id": p["id"], "source": {"branch": {"name": p["branch"]}}} for p in prs]))
+PY
+    ;;
+  "pr create")
+    branch=""; while [[ $# -gt 0 ]]; do [[ $1 == --source ]] && branch=$2; shift; done
+    python3 - "$state" "$branch" <<'PY'
+import json, os, sys
+path = os.path.join(sys.argv[1], "prs.json")
+prs = json.load(open(path)) if os.path.exists(path) else []
+prs.append({"id": len(prs) + 1, "branch": sys.argv[2]})
+json.dump(prs, open(path, "w"))
+PY
+    ;;
+  "pr checks")
+    branch=$(python3 -c 'import json,sys; print(next(p["branch"] for p in json.load(open(sys.argv[1])) if str(p["id"]) == sys.argv[2]))' "$state/prs.json" "$3")
+    commit=$(git -C "$FAKE_ORIGIN" rev-parse --short "$branch")
+    echo "{\"commit\": \"$commit\", \"statuses\": [{\"state\": \"${FAKE_BUILD:-SUCCESSFUL}\"}]}" ;;
+  "pr merge") echo merged ;;
+  *) echo '{}' ;;
+esac

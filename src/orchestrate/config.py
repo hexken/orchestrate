@@ -38,6 +38,8 @@ class Land:
     heavy_lock: Path | None = None
     push_suffix: str = "-push"
     timeout_minutes: int = 60
+    theirs_on_conflict: tuple[str, ...] = ()
+    commit_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -118,7 +119,10 @@ class Effects:
     ) -> str:
         env = role_env(self.config.roles[role_name]) if role_name else dict(os.environ)
         env["ORCH_CONFIG"] = str(self.config.path)
-        env["ORCH_PUSH"] = str(Path(__file__).parent / "land" / "push.sh")
+        env["ORCH_PYTHON"] = sys.executable
+        env["ORCH_DESTINATION"] = self.config.project.destination
+        env["ORCH_LOGS"] = str(self.ws.logs)
+        env["ORCH_LAND_TRIES"] = str(self.config.land.timeout_minutes * 2)
         return jobs.background(unit, label, cmd, self.ws.logs, env=env, cwd=cwd)
 
     def job(self, unit: Unit, label: str) -> str | None:

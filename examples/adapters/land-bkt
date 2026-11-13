@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -uo pipefail
+run() { if [[ -n ${ORCH_DRY_RUN:-} ]]; then printf '%q ' "$@"; echo; else "$@"; fi; }
+verb=${1:?usage: land-bkt describe|auth|land|merge}
+shift
+pr_for_branch() {
+  bkt pr list --limit 0 --json 2>/dev/null | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+d = d if isinstance(d, list) else d.get("values", d.get("pull_requests", []))
+print(next((str(p["id"]) for p in d if (p.get("source") or {}).get("branch", {}).get("name") == sys.argv[1]), ""))
+' "$1"
+}
+build_state() {
+  bkt pr checks "$1" --json 2>/dev/null | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+c = d.get("commit", "")
+if not c or not (c.startswith(sys.argv[1]) or sys.argv[1].startswith(c)):
+    print("PENDING"); sys.exit()
+states = [s.get("state") for s in d.get("statuses", [])]
+if any(s in ("FAILED", "STOPPED", "ERROR") for s in states): print("FAILED")
+elif states and all(s == "SUCCESSFUL" for s in states): print("SUCCESSFUL")
+else: print("PENDING")
+' "$2"
+}
+case $verb in
+  describe)
+    echo '{"forge": "bitbucket", "cli": "bkt"}' ;;
+  auth)
+    bkt auth status >/dev/null 2>&1 ;;
+  merge)
+    pr=$1
+    run bkt pr merge "$pr" && exit 0
+    bkt pr view "$pr" --json --jq .state 2>/dev/null | grep -q MERGED ;;
+  land)
+    worktree=$1 branch=$2 commit=$3 title=$4 body=$5
+    log=${ORCH_LOGS:-/tmp}/push-${branch//\//-}-$commit.log
+    if [[ -n ${ORCH_DRY_RUN:-} ]]; then
+      run "${ORCH_PYTHON:-python3}" -m orchestrate.push "$worktree" "$branch" "$commit" "$log"
+      run bkt pr create --source "$branch" --target "${ORCH_DESTINATION:-main}" --title "$title"
+      exit 0
+    fi
+    open=$(pr_for_branch "$branch") || { echo "FAILED pr-list: bkt pr list failed"; exit 1; }
+    result=$("$ORCH_PYTHON" -m orchestrate.push "$worktree" "$branch" "$commit" "$log" | tail -1)
+    [[ $result == "RESULT: PUSHED"* ]] || { echo "FAILED push: $result ($log)"; exit 1; }
+    pushed=$(echo "$result" | awk '{print $3}')
+    if [[ -z $open ]]; then
+      bkt pr create --source "$branch" --target "$ORCH_DESTINATION" --title "$title" \
+        --body "$(cat "$body")" >"$log.pr" 2>&1
+      open=$(pr_for_branch "$branch")
+      [[ -n $open ]] || { echo "FAILED pr-create: $(tail -3 "$log.pr" | tr '\n' ' ')"; exit 1; }
+    fi
+    for _ in $(seq 1 "${ORCH_LAND_TRIES:-120}"); do
+      state=$(build_state "$open" "$pushed")
+      [[ $state == SUCCESSFUL ]] && { echo "LANDED PR #$open SUCCESSFUL $pushed"; exit 0; }
+      [[ $state == FAILED ]] && { echo "LANDED PR #$open FAILED $pushed"; exit 1; }
+      sleep "${ORCH_LAND_POLL:-30}"
+    done
+    echo "LANDED PR #$open TIMEOUT $pushed"
+    exit 1 ;;
+  *) echo "unknown verb $verb" >&2; exit 2 ;;
+esac
