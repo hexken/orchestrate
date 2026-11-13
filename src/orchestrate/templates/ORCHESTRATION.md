@@ -20,9 +20,9 @@ The orchestrating session decides what to build and handles judgment; `orch` doe
 - **One branch per unit**: `agent/<unit in lowercase>`, cut from `origin/{{destination}}` when the unit starts, one PR into `{{destination}}`.
 - **One Herdr tab per unit**, labelled with the unit's name: the builder, a live view below it (`orch watch <UNIT>`), reviewers beside it. The tab closes when the unit merges.
 - **Never touch the main checkout** `{{repo}}` or its branches. This workspace (`.orchestrate/`) is shared into each worktree by a symlink.
-- **Briefs** in `briefs/`, filled by `orch` per unit: `builder.md`; `review.md` (interactive review); `second_reviewer.md` (print-mode review from another vendor); `light.md` (the review of the builder's fixes). A role may have its own `briefs/<role>.md`.
+- **Briefs** in `briefs/`, filled by `orch` per unit: `builder.md`; `review.md` (interactive review); `second_reviewer.md` (print-mode review from another vendor); `light.md` (the review of the builder's fixes, when a pipeline has one); `refresh.md` (the message to builders after a sibling merges). A role may have its own `briefs/<role>.md`.
 - **Plans**: one per milestone in `plans/`, made by its first builder; each unit adds its own section and its rulings.
-- **Unit files**, in the unit's worktree under `scratch/units/`: `<UNIT>.md` (the builder's summary, with a "Fixes" section after the reviews), `<UNIT>-<role>.md` per review, `<UNIT>-light.md`. Each review starts with its verdict.
+- **Unit files**, in the unit's worktree under `scratch/units/`: `<UNIT>.md` (the builder's summary, with a "Fixes" section after the reviews, one line per finding in the builder brief's form), `<UNIT>-<role>.md` per review, `<UNIT>-light.md` if a light review ran. Each review starts with its verdict and has a "Findings" section.
 
 ## How a unit flows
 
@@ -30,12 +30,12 @@ The orchestrating session decides what to build and handles judgment; `orch` doe
 
 1. **Start.** `orch start <UNIT> --worktree PATH --plan FILE [--role ROLE]`, then `orch supervise` in the background.
 2. **Build.** The builder builds and commits, writes its summary, and stops in its session. It never pushes.
-3. **Reviews and land** (*auto*, when the summary exists and the builder is idle): the reviews of the builder's pipeline, and the land (push, PR, build) at the same time. A docs-only change gets no review.
-4. **Fixes** (*auto*, when a review holds): the builder fixes every finding or declines it with a reason, appends "Fixes" and stops.
-5. **Light review** (*auto*, when "Fixes" appears); the fixes land again.
+3. **Reviews and land** (*auto*, when the summary exists and the builder is idle): the reviews of the builder's pipeline, on the diff from the branch's merge base with the destination, and the land (push, PR, build) at the same time. A docs-only change gets no review.
+4. **Fixes** (*auto*, when a review holds): the builder fixes every finding with a test that fails without the fix, or declines or defers it with a reason, appends "Fixes" and stops. A clean verdict above a non-empty "Findings" section counts as a hold (not yet proven in a live build).
+5. **Land the fixes** (*auto*, when "Fixes" appears): the fixed head lands again and the push step re-runs every check. A pipeline with a `light` role first gets a light review of the fixes; it is off by default, since a light review rarely finds anything the re-run checks and the builder's red tests miss (landing fixes without it is proven in a live build).
 6. **Merge** (*auto*) when the build of the landed head is green and every required review is clean.
-7. **Freshness** (*auto*): a land whose pushed commit lacks the current destination lands again; a branch that moved past the reviewed head is an event.
-8. **Events** move the unit to `waiting` and end `orch supervise` with `EVENT: <unit> <what>`: a light review that still holds, a failed land, an agent gone, blocked, on a dialog or idle too long, a review with no verdict, a job over its limit, every merge, every breakpoint.
+7. **Freshness** (*auto*): when a unit merges, every builder still building, in review or fixing is told to merge the destination now and run its checks, so conflicts surface while the builder is still there (proven in a live build). A land whose pushed commit lacks the current destination lands again. A branch that gained only merges of the destination since its checked head lands again without a review (not yet proven in a live build); new commits past the checked head are an event.
+8. **Events** move the unit to `waiting` and end `orch supervise` with `EVENT: <unit> <what>`: a light review that still holds, a failed land, an agent gone, blocked, on a dialog or idle too long, a review with no verdict, a job over its limit, new commits past the checked head, every merge, every breakpoint.
 
 ## Rules
 
@@ -58,5 +58,6 @@ A milestone's end is a breakpoint; the owner adds others (`orch breakpoint add`)
 
 The orchestrator wakes on a supervisor event or a 30-minute fallback.
 1. Read the events; `orch status`; `herdr agent list` if a session looks wrong.
-2. Handle each event, then `orch resume <UNIT> <status>`. After a merge: tell the owner, update "Current state", start the next unit when a worktree is free.
+2. Handle each event, then `orch resume <UNIT> <status>`. After a merge: tell the owner, update "Current state", start the next unit when a worktree is free; the supervisor has already told the other builders to merge the destination.
+   A builder may forward an owner's message meant for you (`herdr agent prompt orchestrator …`): act on it as the owner's.
 3. Restart `orch supervise` in the background while any unit is active, and set the fallback. To stop it, `orch stop`; never kill its background task from the harness, which kills the review and land jobs it started.

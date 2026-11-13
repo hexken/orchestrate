@@ -31,7 +31,7 @@ The spec gate is optional: `orchestrate-proxy` (a model rules on questions in th
 - **Unit**: one vertical slice with a reviewable outcome, built by one builder session on one branch, merged by one pull request.
 - **Milestone**: a group of units that ends in demonstrable behaviour. Its end is a breakpoint.
 - **Breakpoint**: a point where no new unit starts until the owner passes it. Milestone ends are breakpoints; the owner adds others.
-- **Role**: a job in the flow (builder, reviewer, second reviewer, light reviewer, proxy, mechanical) with a harness, model, effort and mode. `orch roles` prints them; their home is `orchestrate.toml`.
+- **Role**: a job in the flow (builder, reviewer, second reviewer, light reviewer of the fixes, off by default, proxy, mechanical) with a harness, model, effort and mode. `orch roles` prints them; their home is `orchestrate.toml`.
 - **Harness**: the agent CLI (Claude Code, Antigravity, and others). **Adapter**: a small executable that drives one harness or one forge behind a fixed contract.
 - **Land**: push from a clean checkout after the project's checks, open the pull request, wait for the build.
 - **Owner**: the person who owns the specs and decides what agents may not.
