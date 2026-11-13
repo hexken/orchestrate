@@ -49,12 +49,10 @@ def text(*args: str, binary: str = "herdr") -> str:
 
 
 def tab_create(workspace: str, cwd: str, label: str) -> tuple[str, str]:
-    reply = (
-        call(
-            "tab", "create", "--workspace", workspace, "--cwd", cwd, "--label", label, "--no-focus"
-        )
-        or {}
-    )
+    args = ["tab", "create", "--cwd", cwd, "--label", label, "--no-focus"]
+    if workspace:
+        args[2:2] = ["--workspace", workspace]
+    reply = call(*args) or {}
     tab = reply.get("tab") or {}
     pane = reply.get("root_pane") or {}
     if not tab.get("tab_id") or not pane.get("pane_id"):

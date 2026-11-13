@@ -31,7 +31,8 @@ def test_agy_print_argv(fake_env, tmp_path):
     prompt.write_text("hi")
     out = tmp_path / "o.md"
     assert Harness(EXAMPLES / "harness-agy").answer(AGY, str(prompt), str(out), str(tmp_path))
-    assert "--model agy-model --mode plan --disable-slash-commands" in fake_env.read_text()
+    calls = fake_env.read_text()
+    assert "--model agy-model --mode plan --disable-slash-commands --print-timeout 40m" in calls
 
 
 def test_agy_skills_sync_copies(fake_env, tmp_path):
@@ -80,3 +81,10 @@ def test_herdr_refuses_outside_herdr(monkeypatch):
 def test_herdr_agent_state(fake_env, monkeypatch):
     monkeypatch.setenv("FAKE_AGENT_STATUS", "working")
     assert herdr.agent_state("x") == "working"
+
+
+def test_tab_create_without_workspace_omits_the_flag(fake_env):
+    assert herdr.tab_create("", "/w", "a-1") == ("t1", "p1")
+    assert "herdr tab create --cwd /w --label a-1 --no-focus" in fake_env.read_text()
+    herdr.tab_create("ws1", "/w", "a-1")
+    assert "herdr tab create --workspace ws1 --cwd /w" in fake_env.read_text()

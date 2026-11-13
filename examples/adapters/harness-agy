@@ -24,12 +24,13 @@ print(((reply.get("agent") or {}).get("agent_session") or {}).get("value") or ""
   print)
     prompt=$1 out=$2
     if [[ -n ${ORCH_DRY_RUN:-} ]]; then
-      run agy -p "<$prompt>" --model "$ORCH_MODEL" --mode plan --disable-slash-commands
+      run agy -p "<$prompt>" --model "$ORCH_MODEL" --mode plan --disable-slash-commands \
+        --print-timeout "${AGY_PRINT_TIMEOUT:-40m}"
       exit 0
     fi
     tmp=$(mktemp)
     if agy -p "$(cat "$prompt")" --model "$ORCH_MODEL" --mode plan --disable-slash-commands \
-        >"$tmp" && [[ -s $tmp ]]; then
+        --print-timeout "${AGY_PRINT_TIMEOUT:-40m}" >"$tmp" && [[ -s $tmp ]]; then
       mv "$tmp" "$out"
     else
       rm -f "$tmp"; exit 1
