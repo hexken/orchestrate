@@ -442,10 +442,11 @@ def start_unit(
         raise RuntimeError(f"no role {role!r} in the config")
     worktree = str(Path(worktree).expanduser().resolve())
     name = unit_id.lower()
-    breakpoints.auto_milestone(ctx.ws, ctx.config.project.work_plan, unit_id)
-    blocker = breakpoints.blocking(ctx.ws, unit_id)
+    plan_units = breakpoints.plan_units(ctx.config.project.work_plan)
+    blocker = breakpoints.blocking(ctx.ws, unit_id, plan_units)
     if blocker:
         raise RuntimeError(f"breakpoint {blocker} is pending: {unit_id} waits for its pass")
+    breakpoints.auto_milestone(ctx.ws, ctx.config.project.work_plan, unit_id)
     with ctx.ws.lock():
         units = ctx.ws.load()
         for key, other in units.items():

@@ -71,3 +71,34 @@ def test_plan_units_parses_table(tmp_path):
     plan = tmp_path / "plan.md"
     plan.write_text(PLAN)
     assert breakpoints.plan_units(plan) == {"M1-A": "1", "M1-B": "1", "M2-C": "2"}
+
+
+def with_plan(project):
+    plan = project["repo"] / "work-units.md"
+    plan.write_text(PLAN + "| C-SHELL | Console | any | S |\n")
+    text = project["config"].read_text().replace("[land]", f'work_plan = "{plan}"\n[land]')
+    project["config"].write_text(text)
+
+
+def test_refused_early_start_does_not_block_its_own_milestone(fake_env, project, tmp_path):
+    with_plan(project)
+    assert start(project, "M1-A") == 0
+    assert start(project, "M2-C") == 2
+    points = json.loads((project["ws"] / "breakpoints.json").read_text())
+    assert set(points) == {"milestone-1"}
+    set_units(project, **{"M1-A": "merged"})
+    assert start(project, "M1-B") == 0
+
+
+def test_unit_outside_numbered_milestones_starts_during_one(fake_env, project):
+    with_plan(project)
+    assert start(project, "M1-A") == 0
+    assert (
+        breakpoints.blocking(
+            Workspace(project["ws"]),
+            "C-SHELL",
+            breakpoints.plan_units(project["repo"] / "work-units.md"),
+        )
+        is None
+    )
+    assert breakpoints.blocking(Workspace(project["ws"]), "P-OTHER", {}) is None

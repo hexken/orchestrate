@@ -13,7 +13,7 @@ description: Use when a breakpoint is reached in an orchestrated build (the supe
 - After whatever is running now: `orch breakpoint add <name> --now`.
 - At a milestone's end: added automatically when the milestone's first unit starts; by hand, `orch breakpoint add <name> --milestone <N>`.
 
-While a breakpoint is not passed, `orch start` refuses every unit it does not wait for. `orch breakpoint list` shows them.
+While a breakpoint is not passed, `orch start` refuses units it holds back: a milestone-N breakpoint holds back units of later numbered milestones (units of milestone N, and units outside numbered milestones such as console or process units, still start); a breakpoint added with `--after` or `--now` holds back every unit it does not wait for. `orch breakpoint list` shows them.
 
 ## When one is reached
 

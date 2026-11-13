@@ -45,7 +45,9 @@ def plan_units(work_plan: Path | None) -> dict[str, str]:
     return units
 
 
-def add(ws: Workspace, name: str, after: list[str], kind: str = "user") -> Breakpoint:
+def add(
+    ws: Workspace, name: str, after: list[str], kind: str = "user", milestone: str = ""
+) -> Breakpoint:
     points = load(ws)
     if name in points and points[name]["status"] != "passed":
         raise RuntimeError(f"breakpoint {name} already exists ({points[name]['status']})")
@@ -53,6 +55,7 @@ def add(ws: Workspace, name: str, after: list[str], kind: str = "user") -> Break
         "after": sorted(set(after)),
         "status": "pending",
         "kind": kind,
+        "milestone": milestone,
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     points[name] = point
@@ -66,7 +69,7 @@ def milestone(ws: Workspace, work_plan: Path | None, number: str) -> str:
     if not units:
         raise RuntimeError(f"no unit of milestone {number} in the work plan")
     name = f"milestone-{number}"
-    add(ws, name, units, "milestone")
+    add(ws, name, units, "milestone", number)
     return name
 
 
@@ -78,11 +81,17 @@ def auto_milestone(ws: Workspace, work_plan: Path | None, unit_id: str) -> None:
         milestone(ws, work_plan, number)
 
 
-def blocking(ws: Workspace, unit_id: str) -> str | None:
-    for name, point in load(ws).items():
-        if point["status"] != "passed" and unit_id not in point["after"]:
-            return name
-    return None
+def blocks(point: Breakpoint, unit_id: str, plan: dict[str, str]) -> bool:
+    if point["status"] == "passed" or unit_id in point["after"]:
+        return False
+    if point["kind"] != "milestone":
+        return True
+    own = plan.get(unit_id, "")
+    return own.isdigit() and int(own) > int(point["milestone"])
+
+
+def blocking(ws: Workspace, unit_id: str, plan: dict[str, str]) -> str | None:
+    return next((n for n, p in load(ws).items() if blocks(p, unit_id, plan)), None)
 
 
 def reached(ws: Workspace, units: dict[str, Unit]) -> list[str]:
