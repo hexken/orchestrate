@@ -28,6 +28,9 @@ class FakeFx(Effects):
         self.merged = []
         self.ancestor = True
         self.ages = {}
+        self.base_at = ""
+        self.own = ["c1"]
+        self.fail_prompt = set()
 
     def now(self):
         return self.clock
@@ -44,6 +47,12 @@ class FakeFx(Effects):
     def is_ancestor(self, unit, older, newer):
         return self.ancestor
 
+    def merge_base(self, unit):
+        return self.base_at
+
+    def own_commits(self, unit, since):
+        return self.own
+
     def git(self, cwd, *args, check=True):
         return ""
 
@@ -54,6 +63,8 @@ class FakeFx(Effects):
         return name in self.dialogs
 
     def prompt(self, name, message):
+        if name in self.fail_prompt:
+            raise RuntimeError("herdr prompt failed")
         self.prompts.append((name, message))
 
     def split(self, pane, cwd):
@@ -284,6 +295,64 @@ def test_branch_moved_past_reviewed_head(ctx, unit):
     assert "moved past the reviewed head" in tick(ctx, unit)
 
 
+def test_branch_with_only_destination_merges_lands_again(ctx, unit):
+    landing(ctx, unit, "LANDED PR #3 SUCCESSFUL h1")
+    ctx.fx.heads["a-1"] = "h9"
+    ctx.fx.own = []
+    assert tick(ctx, unit) is None
+    assert unit["checked_head"] == "h9" and unit["land_head"] == "h9"
+    assert unit["status"] == "landing" and ctx.fx.merged == []
+    assert sum(1 for j in ctx.fx.jobs_started if j[0] == "land") == 2
+    finish(unit, "land", "LANDED PR #3 SUCCESSFUL h9")
+    assert tick(ctx, unit) == "merged"
+
+
+def test_resume_landing_takes_the_current_head_as_checked(ctx, unit):
+    landing(ctx, unit, "LANDED PR #3 SUCCESSFUL h1")
+    ctx.fx.heads["a-1"] = "h9"
+    assert "moved past" in tick(ctx, unit)
+    flow.resume(ctx, unit, "landing")
+    assert unit["checked_head"] == "h9" and unit["status"] == "landing"
+    assert tick(ctx, unit) is None
+    assert unit["land_head"] == "h9"
+
+
+def test_reviews_diff_against_the_merge_base(ctx, unit):
+    ctx.fx.base_at = "mb7"
+    build_done(ctx, unit)
+    assert unit["base"] == "mb7" and unit["started_base"] == "b0"
+    assert "Review A-1 from mb7 to h1" in ctx.fx.started[0][2]
+
+
+def test_sibling_merge_prompts_builders_still_at_work(ctx, unit):
+    def other(name, status):
+        return {**unit, "unit": name.upper(), "name": name, "status": status}
+
+    units = {
+        "A-1": {**unit, "status": "merged", "pr": "7"},
+        "B-1": other("b-1", "building"),
+        "C-1": other("c-1", "landing"),
+        "D-1": other("d-1", "fixing"),
+        "E-1": other("e-1", "reviewing"),
+        "F-1": other("f-1", "waiting"),
+    }
+    ctx.fx.fail_prompt.add("d-1")
+    flow.refresh_siblings(ctx, units, units["A-1"])
+    assert [name for name, _ in ctx.fx.prompts] == ["b-1", "e-1"]
+    text = ctx.fx.prompts[0][1]
+    assert "main moved: A-1 merged as pull request #7" in text
+    assert "merge origin/main" in text.lower()
+    assert "refresh prompt failed" in units["D-1"]["timeline"][-1][1]
+    assert "told to merge main after A-1" in units["B-1"]["timeline"][-1][1]
+
+
+def test_refresh_uses_the_project_brief(ctx, unit):
+    (ctx.ws.briefs / "refresh.md").write_text("<MERGED> is in <DESTINATION> (<PR>): merge it.\n")
+    units = {"A-1": {**unit, "status": "merged", "pr": "7"}, "B-1": {**unit, "name": "b-1"}}
+    flow.refresh_siblings(ctx, units, units["A-1"])
+    assert ctx.fx.prompts == [("b-1", "A-1 is in main (#7): merge it.")]
+
+
 def test_failed_build_is_an_event(ctx, unit):
     landing(ctx, unit, "LANDED PR #3 FAILED h1")
     assert tick(ctx, unit) == "land: LANDED PR #3 FAILED h1"
@@ -366,3 +435,16 @@ def test_agy_built_unit_uses_its_pipeline(ctx, unit):
 )
 def test_docs_only_globs(path, docs):
     assert matches(path, ("docs/**", "*.md")) is docs
+
+
+def test_supervisor_refreshes_siblings_after_a_merge(ctx, unit, monkeypatch):
+    from orchestrate import cli
+
+    landing(ctx, unit, "LANDED PR #3 SUCCESSFUL h1")
+    sibling = {**unit, "unit": "B-1", "name": "b-1", "status": "building", "jobs": {}}
+    ctx.ws.save({"A-1": unit, "B-1": sibling})
+    ctx.fx.states["b-1"] = "working"
+    events = cli.supervise_once(ctx)
+    assert "EVENT: A-1 merged" in events
+    assert [name for name, _ in ctx.fx.prompts] == ["b-1"]
+    assert "told to merge main after A-1" in ctx.ws.load()["B-1"]["timeline"][-1][1]

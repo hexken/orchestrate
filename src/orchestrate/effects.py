@@ -66,6 +66,17 @@ class Effects:
         out = self.git(unit["worktree"], "diff", "--name-only", unit["base"], unit["branch"])
         return out.splitlines()
 
+    def merge_base(self, unit: Unit) -> str:
+        destination = f"origin/{self.config.project.destination}"
+        return self.git(unit["worktree"], "merge-base", destination, unit["branch"], check=False)
+
+    def own_commits(self, unit: Unit, since: str) -> list[str]:
+        destination = f"^origin/{self.config.project.destination}"
+        out = self.git(
+            unit["worktree"], "rev-list", "--no-merges", f"{since}..{unit['branch']}", destination
+        )
+        return out.splitlines()
+
     def fetch(self, unit: Unit) -> None:
         self.git(unit["worktree"], "fetch", "-q", "origin")
 

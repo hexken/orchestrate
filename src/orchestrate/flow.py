@@ -11,6 +11,7 @@ from orchestrate.adapters import adapter_path
 from orchestrate.config import Config
 from orchestrate.effects import Effects, matches
 from orchestrate.registry import Unit, Workspace
+from orchestrate.scaffold import TEMPLATES
 from orchestrate.verdict import verdict
 
 FIXES = re.compile(r"^\W*#*\W*fixes\b", re.M | re.I)
@@ -183,6 +184,11 @@ def start_reviews(ctx: Ctx, unit: Unit) -> None:
     reset_timers(unit)
     unit["reviews_started"] = ctx.fx.now()
     unit["reviewed_head"] = unit["checked_head"] = ctx.fx.head(unit)
+    ctx.fx.fetch(unit)
+    since = ctx.fx.merge_base(unit)
+    if since and since != unit["base"]:
+        unit.setdefault("started_base", unit["base"])
+        unit["base"] = since
     needs = code_changed(ctx, unit)
     roles = ctx.config.pipeline[unit["harness"]].reviews if needs else ()
     ctx.ws.mark(unit, f"reviews started at {unit['reviewed_head']} ({len(roles)} required)")
@@ -331,11 +337,15 @@ def landed(ctx: Ctx, unit: Unit) -> str | None:
         return ctx.ws.wait(unit, f"land: {line}")
     head = ctx.fx.head(unit)
     if head != unit.get("checked_head", head):
-        return ctx.ws.wait(
-            unit,
-            "the branch moved past the reviewed head: `resume <UNIT> fixing` so the change "
-            "gets a light review",
-        )
+        ctx.fx.fetch(unit)
+        if ctx.fx.own_commits(unit, unit["checked_head"]):
+            return ctx.ws.wait(
+                unit,
+                "the branch moved past the reviewed head with new commits: review them, then "
+                "`resume <UNIT> landing` (it lands the current head) or `resume <UNIT> fixing`",
+            )
+        ctx.ws.mark(unit, f"refreshed with {ctx.config.project.destination} at {head}: landing")
+        unit["checked_head"] = head
     if unit["land_head"] != head:
         land(ctx, unit)
         return None
@@ -556,7 +566,36 @@ def resume(ctx: Ctx, unit: Unit, status: str) -> None:
         unit.setdefault("review_files", unit.get("required", []))
     if status in ("reviewing", "light"):
         restart_missing_reviews(ctx, unit)
+    if status == "landing":
+        unit["checked_head"] = ctx.fx.head(unit)
+        ctx.ws.mark(unit, f"resumed to landing at {unit['checked_head']}")
+        return
     ctx.ws.mark(unit, f"resumed to {status}")
+
+
+REFRESHED = ("building", "reviewing", "fixing")
+
+
+def refresh_siblings(ctx: Ctx, units: dict[str, Unit], merged: Unit) -> None:
+    own = ctx.ws.briefs / "refresh.md"
+    template = own if own.exists() else TEMPLATES / "briefs" / "refresh.md"
+    text = briefs.fill(
+        template,
+        {
+            "DESTINATION": ctx.config.project.destination,
+            "MERGED": merged["unit"],
+            "PR": f"#{merged.get('pr', '?')}",
+        },
+    ).strip()
+    for other in units.values():
+        if other is merged or other["status"] not in REFRESHED:
+            continue
+        try:
+            ctx.fx.prompt(other["name"], text)
+        except Exception as err:
+            ctx.ws.mark(other, f"refresh prompt failed: {err}")
+            continue
+        ctx.ws.mark(other, f"told to merge {ctx.config.project.destination} after {merged['unit']}")
 
 
 def reland(ctx: Ctx, unit: Unit) -> None:

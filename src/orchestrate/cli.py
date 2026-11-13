@@ -81,6 +81,8 @@ def supervise_once(ctx: flow.Ctx) -> list[str]:
                 event = ctx.ws.wait(unit, f"error: {err}")
             if event:
                 events.append(f"EVENT: {key} {event}")
+            if event == "merged":
+                flow.refresh_siblings(ctx, units, unit)
         ctx.ws.save(units)
     events += [f"EVENT: - breakpoint {n} reached" for n in breakpoints.reached(ctx.ws, units)]
     if not events and not any(u["status"] in ACTIVE for u in units.values()):

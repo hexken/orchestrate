@@ -15,6 +15,7 @@ WORKSPACE_FILES = (
     "briefs/review.md",
     "briefs/second_reviewer.md",
     "briefs/light.md",
+    "briefs/refresh.md",
 )
 FOLDERS = ("adapters", "plans", "rulings", "logs", "bin")
 EXCLUDES = ("/.orchestrate", "/scratch/")
