@@ -32,4 +32,6 @@ The DSL interface is two typed protocols: `Platform`, the domain verbs through t
 
 `orch scan` compares the spec with the tests: a scenario title (a list line under a `### <section>.<milestone>` heading by default) with no test of that name; a test matching no title; a marker naming an unknown guarantee; guarantees with no test. Untested titles of milestones before `[spec_gate].milestone` fail the scan; later ones are only reported. Raise `milestone` when a milestone starts. Property tests (under `property_dir`) need no title.
 
-A spec edit is the owner's: titles a unit needs go to the owner as a patch, and the unit's tests that depend on them wait in a patch in `.orchestrate/rulings/` until the titles exist.
+A spec edit is the owner's: titles a unit needs go to the owner as a patch, and the unit's tests that depend on them wait in a patch in `.orchestrate/rulings/` until the titles exist. The breakpoint counts these held tests, since the scan passes without them.
+
+If a test runs the scan on the real spec, every spec edit becomes a gate on every push: a spec line and the test changes it implies (a renamed title, a re-marked guarantee) must land together, in one change. Better still, let that test warn rather than fail on a marker the spec has just changed, and leave the failing to `orch scan` at the breakpoint.
