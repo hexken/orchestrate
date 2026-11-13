@@ -15,8 +15,8 @@ Bundle into at most two AskUserQuestion rounds:
 - the forge (GitHub, Bitbucket, other) and its CLI;
 - harness, model and effort per role. Offer the defaults from `ORCH roles` (shown after step 2) as the recommended option; the roles are orchestrator, builder, reviewer, second_reviewer (another vendor, print mode), light_reviewer, light_reviewer_claude (used when the builder is not Claude), proxy, proxy_second, mechanical;
 - how many units may run at once (worktrees; two is a good start on one laptop);
-- the checks a branch must pass before it is pushed (read the repository's CI config and test commands, and propose them);
-- whether whole-suite tests need a shared lock (a heavy suite on one laptop does);
+- the checks a branch must pass before it is pushed: read the repository's CI config step by step and propose a local command for every step it runs (lint, types, tests, builds of other parts such as a UI, generated-file checks), not only the obvious ones. A CI failure costs a whole build; the same failure found by the push step costs seconds;
+- whether whole-suite tests need a shared lock (a heavy suite on one laptop does). The push step holds `[land].heavy_lock` around the checks and sets `ORCH_HEAVY_LOCK_HELD=1`; a lock wrapper the project's own test command uses must skip locking when that is set, or a nested run deadlocks;
 - whether the spec gate is on (`orchestrate-proxy`, `orchestrate-acceptance`).
 
 ## 2. Scaffold
@@ -29,10 +29,11 @@ It writes `.orchestrate/` (never overwriting a file), the `bin/orch` wrapper, an
 
 Edit `.orchestrate/orchestrate.toml`; it is the one home of these values:
 - `[project].work_plan`;
-- `[roles.<role>]` for every role the user changed; an extra builder such as `[roles.builder_agy]` for units built on another harness, and a `[pipeline.<harness>]` saying which reviews a unit built on that harness gets;
-- `[land]`: `checks`, `heavy_lock`, `theirs_on_conflict` and `commit_paths` if a check writes results that must be committed;
+- `[roles.<role>]` for every role the user changed; an extra builder such as `[roles.builder_agy]` for units built on another harness, and a `[pipeline.<harness>]` saying which reviews a unit built on that harness gets. A pipeline's `light` role (a light review of the fixes) is empty by default: the builder proves each fix with a test that fails without it and the land re-runs every check. Set it only if the record shows fixes escaping;
+- `[land]`: `checks`, `heavy_lock`, `theirs_on_conflict` and `commit_paths` if a check writes results that must be committed; `ci_config` (the CI file, relative to the repository) so `orch doctor` lists every CI step with no local counterpart, and `ci_ignore` for steps that only belong in CI (installs, deploys). Where `orch doctor` says it cannot parse a CI line, compare that part by hand;
 - `[worktrees].share`: untracked files of the main checkout that every worktree needs (for example `.claude` or a local rules file);
 - `[review].context`: files a print-mode reviewer needs copied in (spec, work plan);
+- `briefs/refresh.md`: the message builders get when a sibling merges; add the project's conflict hints (which generated files to regenerate, which shared lists to keep both sides of);
 - `[[sources.entries]]` and `[[homes]]` from `READINESS.md`;
 - `[spec_gate]` if on.
 `ORCH roles` then shows the table; `ORCH doctor` checks the rest.
