@@ -3,4 +3,4 @@ echo "claude $*" >>"${FAKE_LOG:-/dev/null}"
 model=""
 while [[ $# -gt 0 ]]; do [[ $1 == --model ]] && model=$2; shift; done
 [[ $model == orch-no-such-model ]] && { echo "partial"; exit 1; }
-echo ok
+echo "${FAKE_ANSWER:-ok}"

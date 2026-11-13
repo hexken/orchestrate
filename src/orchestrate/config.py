@@ -50,6 +50,7 @@ class Timeouts:
     wedged_minutes: int = 45
     job_hours: int = 4
     poll_seconds: int = 30
+    idle_seconds: int = 60
 
 
 @dataclass(frozen=True)

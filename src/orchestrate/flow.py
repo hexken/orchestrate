@@ -224,7 +224,7 @@ def idle_twice(ctx: Ctx, unit: Unit, name: str) -> bool:
         unit.pop(key, None)
         return False
     unit.setdefault(key, ctx.fx.now())
-    return bool(ctx.fx.now() - unit[key] >= 60)
+    return bool(ctx.fx.now() - unit[key] >= ctx.config.timeouts.idle_seconds)
 
 
 def stalled(ctx: Ctx, unit: Unit, name: str, label: str, harness: str) -> str | None:

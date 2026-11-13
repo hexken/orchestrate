@@ -27,6 +27,7 @@ stall_minutes = 20
 wedged_minutes = 45
 job_hours = 4
 poll_seconds = 30
+idle_seconds = 60
 
 [review]
 docs_only = ["docs/**", "*.md"]
