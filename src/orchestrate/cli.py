@@ -7,10 +7,11 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from orchestrate import (
+    align,
     breakpoints,
     conform,
     doctor,
@@ -299,6 +300,15 @@ def cmd_breakpoint(ctx: flow.Ctx, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_align(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    work = align.run(ctx.config)
+    out = Path(args.out) if args.out else ctx.ws.root / "align" / f"align-{date.today()}.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(align.markdown(work))
+    print(f"{len(work.findings)} item(s) in {out}")
+    return 1 if work.findings else 0
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -318,6 +328,7 @@ COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "scan": cmd_scan,
     "install-acceptance": cmd_install_acceptance,
     "breakpoint": cmd_breakpoint,
+    "align": cmd_align,
 }
 STANDALONE = ("doctor", "scaffold")
 
@@ -338,6 +349,8 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--once", action="store_true")
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
+    aligned = sub.add_parser("align", help="cross-source alignment checks; writes a worklist")
+    aligned.add_argument("--out")
     point = sub.add_parser("breakpoint", help="add, list or pass a breakpoint")
     point.add_argument("action", choices=("add", "list", "pass"))
     point.add_argument("name", nargs="?")

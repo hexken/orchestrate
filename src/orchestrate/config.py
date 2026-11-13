@@ -9,6 +9,7 @@ KINDS = ("spec", "plan", "bookkeeping", "memory", "log", "code", "docs")
 OWNERS = ("owner", "agent")
 STRENGTHS = ("conservative", "full", "none")
 MODES = ("interactive", "print")
+ROOTS = ("impl", "planning", "workspace")
 
 
 class ConfigError(ValueError):
@@ -80,6 +81,7 @@ class Source:
     kind: str
     owner: str = "agent"
     compact: str = "none"
+    root: str = "impl"
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,7 @@ class Sources:
 class Home:
     question: str
     path: str
+    root: str = "planning"
 
 
 @dataclass(frozen=True)
@@ -228,6 +231,7 @@ def sources(data: dict[str, Any]) -> Sources:
         choice(entry.kind, KINDS, f"{key}.kind")
         choice(entry.owner, OWNERS, f"{key}.owner")
         choice(entry.compact, STRENGTHS, f"{key}.compact")
+        choice(entry.root, ROOTS, f"{key}.root")
         entries.append(entry)
     impl_docs = choice(data.get("impl_docs", "deferred"), ("deferred", "maintained"), "sources")
     return Sources(impl_docs, tuple(entries))
