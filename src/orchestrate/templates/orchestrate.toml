@@ -1,0 +1,41 @@
+[project]
+name = "{{name}}"
+repo = "{{repo}}"
+destination = "{{destination}}"
+branch_prefix = "agent/"
+planning_repo = "{{planning_repo}}"
+scratch = "scratch"
+
+[herdr]
+workspace = ""
+orchestrator_pane = ""
+
+[worktrees]
+paths = []
+
+[land]
+adapter = "{{land}}"
+checks = []
+heavy_lock = ""
+theirs_on_conflict = []
+commit_paths = []
+
+[timeouts]
+stall_minutes = 20
+wedged_minutes = 45
+job_hours = 4
+poll_seconds = 30
+
+[review]
+docs_only = ["docs/**", "*.md"]
+context = []
+
+[breakpoints]
+steps = ["freeze", "align", "compact", "digest"]
+conditional_go = ""
+
+[sources]
+impl_docs = "deferred"
+
+[spec_gate]
+enabled = false

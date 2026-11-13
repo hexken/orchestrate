@@ -9,7 +9,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from orchestrate import conform, doctor, flow, watch
+from orchestrate import conform, doctor, flow, scaffold, watch
 from orchestrate.adapters import Harness, Land, adapter_path
 from orchestrate.config import ConfigError, load
 from orchestrate.effects import Effects
@@ -211,6 +211,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return code
 
 
+def cmd_scaffold(args: argparse.Namespace) -> int:
+    answers = scaffold.Answers(
+        Path(args.repo),
+        args.name or Path(args.repo).resolve().name,
+        args.destination,
+        args.planning_repo or "",
+        args.land or "",
+    )
+    for name, what in scaffold.scaffold(answers):
+        print(f"{what:6} {name}")
+    return 0
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -244,6 +257,12 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
     sub.add_parser("doctor", help="check the prerequisites")
+    build = sub.add_parser("scaffold", help="write the .orchestrate workspace into a repository")
+    build.add_argument("--repo", required=True)
+    build.add_argument("--name")
+    build.add_argument("--destination", default="main")
+    build.add_argument("--planning-repo")
+    build.add_argument("--land")
     sub.add_parser("watch", help="live view of one unit (opened in its Herdr tab)").add_argument(
         "unit"
     )
@@ -274,6 +293,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.verb == "doctor":
         return cmd_doctor(args)
+    if args.verb == "scaffold":
+        return cmd_scaffold(args)
     try:
         return COMMANDS[args.verb](context(args), args)
     except (ConfigError, RuntimeError) as err:
