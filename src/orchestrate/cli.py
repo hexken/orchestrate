@@ -10,7 +10,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from orchestrate import conform, doctor, flow, report, scaffold, watch, worktrees
+from orchestrate import conform, doctor, flow, report, scaffold, specgate, watch, worktrees
 from orchestrate.adapters import Harness, Land, adapter_path
 from orchestrate.config import ConfigError, load
 from orchestrate.effects import Effects
@@ -237,6 +237,30 @@ def cmd_report(ctx: flow.Ctx, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_scan(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    result = specgate.scan(ctx.config.spec_gate, Path(args.worktree or ctx.config.project.repo))
+    for kind, lines in (
+        ("ERROR", result.errors),
+        ("FAIL", result.failures),
+        ("report", result.reported),
+    ):
+        for line in lines:
+            print(f"{kind} {line}")
+    print("scan passes" if result.ok else "scan fails")
+    return 0 if result.ok else 1
+
+
+def cmd_install_acceptance(ctx: flow.Ctx, args: argparse.Namespace) -> int:
+    worktree = Path(args.worktree or Path.cwd())
+    if args.sync:
+        specgate.sync(ctx.config.spec_gate, worktree)
+        print(f"drafts refreshed in {ctx.config.spec_gate.drafts_dir}")
+        return 0
+    ok, message = specgate.install(ctx.config.spec_gate, worktree)
+    print(message)
+    return 0 if ok else 1
+
+
 COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "start": cmd_start,
     "supervise": cmd_supervise,
@@ -253,6 +277,8 @@ COMMANDS: dict[str, Callable[[flow.Ctx, argparse.Namespace], int]] = {
     "watch": cmd_watch,
     "worktrees": cmd_worktrees,
     "report": cmd_report,
+    "scan": cmd_scan,
+    "install-acceptance": cmd_install_acceptance,
 }
 STANDALONE = ("doctor", "scaffold")
 
@@ -273,6 +299,11 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--once", action="store_true")
     sub.add_parser("stop", help="stop this workspace's supervisor; jobs keep running")
     sub.add_parser("status", help="list units")
+    scan = sub.add_parser("scan", help="spec gate: scenario titles and guarantees vs tests")
+    scan.add_argument("--worktree")
+    inst = sub.add_parser("install-acceptance", help="spec gate: install drafted acceptance tests")
+    inst.add_argument("--worktree")
+    inst.add_argument("--sync", action="store_true", help="refresh the drafts from the tests")
     rep = sub.add_parser("report", help="stage times, review yield and tokens from the logs")
     rep.add_argument("--since", help="only units started on or after this date (YYYY-MM-DD)")
     rep.add_argument("--json", action="store_true")

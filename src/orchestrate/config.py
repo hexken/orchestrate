@@ -106,7 +106,9 @@ class SpecGate:
     acceptance_dir: str = "tests/acceptance"
     drafts_dir: str = "scratch/acceptance"
     install_checks: tuple[str, ...] = ()
-    title_section: str = r"^###\s+(?P<milestone>\d+)\.(?P<group>\d+)"
+    title_section: str = r"^###\s+\d+\.(?P<milestone>\d+)\b"
+    test_marker: str = r"@pytest\.mark\.guarantee\(\s*\"(?P<id>[GC]\d+)\"\s*\)"
+    property_dir: str = "properties"
     title_pattern: str = (
         r"^-\s+(?P<title>[A-Z][^(\n]*?)(?:\s+\((?P<refs>[GC]\d+(?:,\s*[GC]\d+)*)\))?\s*$"
     )
